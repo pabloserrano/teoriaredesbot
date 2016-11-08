@@ -1,0 +1,4 @@
+[Tokens]
+telegram_token = TELEGRAMTOKEN
+pushover_client = PUSHOVERCLIENTTOKEN
+pushover_api = PUSHOVERAPITOKEN
