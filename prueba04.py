@@ -39,7 +39,10 @@ def handle(msg):
 			#client.send_message("Nueva conexión al bot", title="Telegram bot")
 	elif command == '/help':
 		logging.info('Comando /help de %s', chat_id)
-		bot.sendMessage(chat_id, 'Aqui vendría la ayuda')
+		f = open('commands.txt')
+		for line in f:
+			bot.sendMessage(chat_id, '%s' %line)
+		f.close()
 	elif command == '/settings':
 		logging.info('Comando /settings de %s', chat_id)
 		bot.sendMessage(chat_id, 'Configuracion actual: News %i' %news_update[key])
