@@ -25,7 +25,7 @@ def handle(msg):
 	command = msg['text']
 	key = str(chat_id)
 
-	print 'Got command: %s from %i' %(command,chat_id)
+	print 'Comando %s from %i' %(command,chat_id)
 
 	if command == '/start':
 		logging.info('Comando /start de %s', chat_id)
@@ -55,9 +55,6 @@ def handle(msg):
 		logging.info('Comando /stats de %s', chat_id)
 		bot.sendMessage(chat_id, 'En total he visto %i IDs' % len(unique_users))
 		
-
-
-
 
 
 config = ConfigParser.ConfigParser()
