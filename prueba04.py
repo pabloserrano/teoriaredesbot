@@ -46,12 +46,12 @@ def handle(msg):
 	elif command == '/settings':
 		logging.info('Comando /settings de %s', chat_id)
 		bot.sendMessage(chat_id, 'Configuracion actual: News %i' %news_update[key])
-	elif command == '/newsOn':
-		logging.info('Comando /newsOn de %s', chat_id)
+	elif command == '/newoOn':
+		logging.info('Comando /newson de %s', chat_id)
 		bot.sendMessage(chat_id, 'Noticias activadas')
 		news_update[key] = 1
-	elif command == '/newsOff':
-		logging.info('Comando /newsOff de %s', chat_id)
+	elif command == '/newsoff':
+		logging.info('Comando /newsoff de %s', chat_id)
 		bot.sendMessage(chat_id, 'Noticias desactivadas')
 		news_update[key] = 0
 	elif command == '/stats':
