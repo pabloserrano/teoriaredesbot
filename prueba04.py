@@ -76,7 +76,7 @@ logging.info('Arranco el bot')
 #client.send_message("Bot de teoría de redes arrancado", title="Telegram bot")
 
 while 1: 
-	time.sleep(10)
+	time.sleep(30)
 	for x in news_update:
 		if news_update[x] == 1: 
 			bot.sendMessage(x, 'Noticias de las')
