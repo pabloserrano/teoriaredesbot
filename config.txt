@@ -1,0 +1,11 @@
+[Tokens]
+telegram_token = TELEGRAM-TOKEN
+
+[Files]
+log = ./activity.log
+
+users = ./files/users.csv
+news = ./files/news.txt
+freetext = ./files/freetext.txt
+randomfacts = ./files/randomfacts.txt
+randomfacts_results = ./files/random_results.txt
