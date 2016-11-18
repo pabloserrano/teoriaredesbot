@@ -6,19 +6,14 @@ import os
 import csv
 import sys
 import time
-import random
-from datetime import datetime 
+import datetime 
 import random
 from collections import defaultdict
 import logging
 import ConfigParser
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler, Job
 
-
-# Enable logging
-#logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',level=logging.INFO)
-#logger = logging.getLogger(__name__)
 
 
 def load_config_users( file, users ):
@@ -47,12 +42,26 @@ def load_calendar( file, calendar ):
 
 
 def admin(bot, update):
-	print users[str(update.message.chat_id)]
 	if int(users[str(update.message.chat_id)][0]):
 		update.message.reply_text('Parte de admin del bot')
 	else:
 		update.message.reply_text('Comando no reconocido')
-		
+
+def alert(bot, update, args):
+	global users
+	if int(users[str(update.message.chat_id)][0]):
+		chat_id = update.message.chat_id
+		if len(args) == 0:
+			update.message.reply_text('Uso: /alert <texto de aviso>')
+		else:
+			for key in users:
+				if int(key) != chat_id:
+					bot.sendMessage(chat_id=int(key), text=str(update.message.text))
+			update.message.reply_text('Alerta enviada')
+			logging.info('Alerta enviada: %s' % str(update.message.text))
+	else:
+		update.message.reply_text('Comando no reconocido')
+
 
 def start(bot, update):
 	global users
@@ -71,7 +80,10 @@ def start(bot, update):
 
 
 def help(bot, update):
-    update.message.reply_text('Usa el comando /settings para configurar los parámetros, el comando /freetext para enviar texto libre, el comando /randomfact para una curiosidad al azar')
+	if int(users[str(update.message.chat_id)][0]):
+		update.message.reply_text('/alert para enviar una alerta, /settings para configurar los parámetros, /freetext para enviar texto libre, /randomfact para una curiosidad al azar')
+	else:
+		update.message.reply_text('/settings para configurar los parámetros, /freetext para enviar texto libre, /randomfact para una curiosidad al azar')
 
 
 def randomfact(bot, update):
@@ -91,9 +103,8 @@ def randomfact(bot, update):
 def settings(bot, update):
 	global users
 	global FILE_USERS
-	update.message.reply_text('Cambiar configuración:')
+	#update.message.reply_text('Cambiar configuración:')
 
-	#s0 newson, s1 newsoff, s2 pollson, s3 pollsoff
 	keyboard = [[InlineKeyboardButton("Activar", callback_data='s.news.si'),
 		InlineKeyboardButton("Desactivar", callback_data='s.news.no')]]
 	reply_markup = InlineKeyboardMarkup(keyboard)
@@ -114,7 +125,7 @@ def freetext(bot, update, args):
     	update.message.reply_text('Uso: /freetext <texto>')
     else:
     	with open(FILE_TEXT, "a") as myfile:
-    		myfile.write("%s \t %s \t %s\n" % (str(datetime.now()), str(chat_id), str(update.message.text)))
+    		myfile.write("%s \t %s \t %s\n" % (str(datetime.datetime.now()), str(chat_id), str(update.message.text)))
     	update.message.reply_text('Texto guardado')
 
 
@@ -158,7 +169,7 @@ def button(bot, update):
     	else:
     		text="Vaya..."
     	with open(FILE_RANDOM_RESULTS, "a") as myfile:
-    		myfile.write("%s \t %s \t %s \t %s\n" % (str(datetime.now()), identifier, str(chat_id), reply))    	
+    		myfile.write("%s \t %s \t %s \t %s\n" % (str(datetime.datetime.now()), identifier, str(chat_id), reply))    	
     	bot.editMessageText(text=text, chat_id=chat_id, message_id=message_id)
     
     else:
@@ -171,15 +182,20 @@ def echo(bot, update):
 def error(bot, update, error):
     logger.warn('Update "%s" caused error "%s"' % (update, error))
 
-def todays_news(bot):
-	# Load News
+def todays_news(bot,job):
+	global calendar
+	global users
+	global FILE_NEWS
+	logging.info('Se lanza todays_news')
 	if os.path.exists(FILE_NEWS) and os.stat(FILE_NEWS).st_size > 0:
 		num_news = load_calendar(FILE_NEWS, calendar)
-		print('Hay %i noticias cargadas' % num_news)
-		if calendar.has_key(datetime.date.today().strftime("%Y-%m-%d")):
-			print('Hoy tendriamos noticias')
+		todays_key = datetime.date.today().strftime("%Y-%m-%d")
+		if calendar.has_key(todays_key):
+			for key in users:
+				if users[key][2] == '1':
+					bot.sendMessage(chat_id=int(key), text=calendar[todays_key])
 	else:
-		print('No hay noticias que cargar')	
+		logging.warn('todays_news: no hay fichero de noticias')
 
 
 def main():
@@ -187,6 +203,7 @@ def main():
 	global calendar
 	global FILE_USERS
 	global FILE_TEXT
+	global FILE_NEWS
 	global FILE_RANDOM
 	global FILE_RANDOM_RESULTS
 
@@ -205,6 +222,7 @@ def main():
                     format='%(asctime)s %(levelname)s %(message)s',
                     filename=FILE_LOG,
                     filemode='a')
+	logging.getLogger().addHandler(logging.StreamHandler())
 
 	# Global variables
 	users = defaultdict(list)
@@ -220,11 +238,20 @@ def main():
 
 	# Create the EventHandler and pass it your bot's token.
 	updater = Updater(TELEGRAM_TOKEN)
+	
+
+	#Job queue to schedule updates
+	print('Programo la noticia del dia')
+	jq = updater.job_queue
+	job_news = Job(todays_news, 10)
+	jq.put(job_news, next_t=0.0)
+
 
 	# Get the dispatcher to register handlers
 	dp = updater.dispatcher
 
 	# on different commands - answer in Telegram
+	dp.add_handler(CommandHandler("alert", alert, pass_args=True))
 	dp.add_handler(CommandHandler("admin", admin))
 	dp.add_handler(CommandHandler("start", start))
 	dp.add_handler(CommandHandler("help", help))
