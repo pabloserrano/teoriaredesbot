@@ -241,10 +241,16 @@ def main():
 	
 
 	#Job queue to schedule updates
-	print('Programo la noticia del dia')
 	jq = updater.job_queue
-	job_news = Job(todays_news, 10)
-	jq.put(job_news, next_t=0.0)
+	#Cada 24 horas
+	job_news = Job(todays_news, 24*60*60)
+	#Calculo segundos hasta Hora de las news
+	now = datetime.datetime.now()
+	time_news = now.replace(hour=9, minute=0, second=0, microsecond=0)
+	seconds = (time_news - now).total_seconds()
+	if seconds < 0:
+		seconds = seconds + 24*60*60
+	jq.put(job_news, next_t=seconds)
 
 
 	# Get the dispatcher to register handlers
@@ -258,6 +264,7 @@ def main():
 	dp.add_handler(CommandHandler("randomfact", randomfact))
 	dp.add_handler(CommandHandler("settings", settings))
 	dp.add_handler(CommandHandler("freetext", freetext, pass_args=True))
+
 	dp.add_handler(CallbackQueryHandler(button))
 
 	# on noncommand i.e message - echo the message on Telegram
