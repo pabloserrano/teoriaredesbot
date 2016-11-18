@@ -1,6 +1,0 @@
-/start - arranca el bot
-/help - Proporciona ayuda
-/settings - Configuracion actual
-/newson - Activa noticias
-/newsoff - Desactiva noticias
-/stats - Estadisticas
