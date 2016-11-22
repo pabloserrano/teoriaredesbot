@@ -10,9 +10,10 @@ import datetime
 import random
 from collections import defaultdict
 import logging
-import ConfigParser
+import configparser
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler, Job
+import codecs
 
 
 
@@ -135,7 +136,7 @@ def stats(bot, update):
 		update.message.reply_text('Hay %i usuarios' % num_users)
 		today = datetime.date.today()
 		update.message.reply_text('Dia: %s actividad: %i' % (today.strftime("%Y-%m-%d"), activity_count(today,FILE_LOG)))
-		for d in xrange(1,3):
+		for d in range(1,3):
 			today = today - datetime.timedelta(days=1)
 			update.message.reply_text('Dia: %s actividad: %i' % (today.strftime("%Y-%m-%d"), activity_count(today,FILE_LOG)))
 	else:
@@ -220,7 +221,7 @@ def echo(bot, update):
     update.message.reply_text(update.message.text)
 
 def error(bot, update, error):
-    logger.warn('Update "%s" caused error "%s"' % (update, error))
+    logging.warn('Update "%s" caused error "%s"' % (update, error))
 
 def todays_news(bot,job):
 	global calendar
@@ -230,7 +231,7 @@ def todays_news(bot,job):
 	if os.path.exists(FILE_NEWS) and os.stat(FILE_NEWS).st_size > 0:
 		num_news = load_calendar(FILE_NEWS, calendar)
 		todays_key = datetime.date.today().strftime("%Y-%m-%d")
-		if calendar.has_key(todays_key):
+		if todays_key in calendar:
 			for key in users:
 				if users[key][2] == '1':
 					bot.sendMessage(chat_id=int(key), text=calendar[todays_key])
@@ -259,7 +260,7 @@ def main():
 
 
 	# Load configuration parameters
-	config = ConfigParser.ConfigParser()
+	config = configparser.ConfigParser()
 	config.readfp(open(r'config.txt'))
 	TELEGRAM_TOKEN = config.get('Tokens', 'telegram_token')
 	FILE_USERS = config.get('Files', 'users')
