@@ -2,10 +2,13 @@
 telegram_token = TELEGRAM-TOKEN
 
 [Files]
-log = ./activity.log
+log = ./files/activity.log
 
 users = ./files/users.csv
+
 news = ./files/news.txt
-freetext = ./files/freetext.txt
+news_results = ./files/news_results.txt
 randomfacts = ./files/randomfacts.txt
 randomfacts_results = ./files/random_results.txt
+
+freetext = ./files/freetext.txt
