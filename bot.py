@@ -14,8 +14,18 @@ import configparser
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, ReplyKeyboardMarkup, ReplyKeyboardHide
 from telegram.ext import (Updater, CommandHandler, ConversationHandler, MessageHandler, Filters, CallbackQueryHandler, RegexHandler, Job)
 import codecs
+import pandas as pd
+from subprocess import call
+
+
 
 TIPO_FEEDBACK, CLASE_VALORADA, PEDIR_PROBLEMA, PROBLEMA_PEDIDO, SOLUCION_A_ENVIAR, SOLUCION_ENVIADA = range(6)
+
+TIPO_SETTINGS = range(1)
+
+TIPO_STATS = range(1)
+
+
 
 
 def load_config_users( file, users ):
@@ -74,7 +84,7 @@ def start(bot, update):
 	global users
 	global FILE_USERS
 	if str(update.message.chat_id) not in users:
-		update.message.reply_text('Hola! Por defecto, noticias y encuestas activadas (comando /settings para cambiar configuracion)')
+		update.message.reply_text('Hola! Por defecto, noticias y encuestas activadas (comando /help para ayuda)')
 		users[str(update.message.chat_id)].append(0)
 		users[str(update.message.chat_id)].append(1)
 		users[str(update.message.chat_id)].append(1)
@@ -89,9 +99,9 @@ def start(bot, update):
 def help(bot, update):
 	logging.info('Usuario %i comando /help ' % update.message.chat_id)
 	if int(users[str(update.message.chat_id)][0]):
-		update.message.reply_text('/alert para enviar una alerta, /settings para configurar los parámetros, /freetext para enviar texto libre, /randomfact para una curiosidad al azar, /stats para estadisticas')
+		update.message.reply_text('/alert Manda una alerta a todos\n/help Muestra este mensaje\n/feedback Para votar problemas para clase, valorar la última clase o enviar la solución al examen\n/freetext Para enviar texto libre\n/randomfact Para una curiosidad al azar\n/settings Configuración\n/stats Estadísticas')
 	else:
-		update.message.reply_text('/settings para configurar los parámetros, /freetext para enviar texto libre, /randomfact para una curiosidad al azar')
+		update.message.reply_text('/help Muestra este mensaje\n/feedback Para solicitar problemas en clase, valorar la última clase o enviar la solución al examen\n/freetext Para enviar texto libre\n/randomfact Para una curiosidad al azar\n/settings Configuración\n/stats Estadísitcas')
 
 
 def randomfact(bot, update):
@@ -140,44 +150,6 @@ def randomfact(bot, update):
 			update.message.reply_text('Te ha parecido interesante?', reply_markup=reply_markup)
 
 
-def settings(bot, update):
-	global users
-	global FILE_USERS
-	logging.info('Usuario %i comando /settings ' % update.message.chat_id)
-
-	keyboard = [[InlineKeyboardButton("Activar", callback_data='s.news.si'),
-		InlineKeyboardButton("Desactivar", callback_data='s.news.no')]]
-	reply_markup = InlineKeyboardMarkup(keyboard)
-	update.message.reply_text('Recibir noticias', reply_markup=reply_markup)
-
-	keyboard = [[InlineKeyboardButton("Activar", callback_data='s.polls.si'),
-		InlineKeyboardButton("Desactivar", callback_data='s.polls.no')]]
-	reply_markup = InlineKeyboardMarkup(keyboard)
-	update.message.reply_text('Participar en encuestas', reply_markup=reply_markup)
-
-
-def activity_count(datestamp, fname):
-	keyword = datestamp.strftime("%Y-%m-%d")
-	with open(fname, 'r') as fin:
-		return sum([1 for line in fin if keyword in line])
-
-
-def stats(bot, update):
-	global users
-	global FILE_USERS
-	global FILE_LOG
-	logging.info('Usuario %i comando /stats ' % update.message.chat_id)
-	if int(users[str(update.message.chat_id)][0]):
-		num_users = sum(1 for line in open(FILE_USERS)) 
-		update.message.reply_text('Hay %i usuarios' % num_users)
-		today = datetime.date.today()
-		update.message.reply_text('Dia: %s actividad: %i' % (today.strftime("%Y-%m-%d"), activity_count(today,FILE_LOG)))
-		for d in range(1,3):
-			today = today - datetime.timedelta(days=1)
-			update.message.reply_text('Dia: %s actividad: %i' % (today.strftime("%Y-%m-%d"), activity_count(today,FILE_LOG)))
-	else:
-		update.message.reply_text('Comando no reconocido')
-
 
 def freetext(bot, update, args):
 	#TODO HAY QUE FORMATEAR LA ENTRADA QUE NO SEAN TILDES O COSAS RARAS
@@ -187,7 +159,7 @@ def freetext(bot, update, args):
     if len(args) == 0:
     	update.message.reply_text('Uso: /freetext <texto>')
     else:
-    	with open(FILE_TEXT, "a") as myfile:
+    	with codecs.open(FILE_TEXT, "a", "utf-8") as myfile:
     		myfile.write("%s\t%s\t%s\n" % (str(datetime.datetime.now()), str(chat_id), str(update.message.text)))
     	update.message.reply_text('Texto guardado')
 
@@ -211,18 +183,11 @@ def button(bot, update):
     	dummy, parameter, reply = query.data.split(".")
     	if parameter == 'news':
     		if reply == 'si':
-    			text="Noticias activadas"
+    			text="Notificaciones activadas"
     			users[str(chat_id)][2] = '1'
     		else:
-    			text="Noticias desactivadas"
+    			text="Notificaciones desactivadas"
     			users[str(chat_id)][2] = '0'
-    	elif parameter == 'polls':
-    		if reply == 'si':
-    			text="Encuestas activadas"
-    			users[str(chat_id)][1] = '1'
-    		else:
-    			text="Encuestas desactivadas"
-    			users[str(chat_id)][1] = '0'
     	else:
     		text="Parametro de settings no reconocido"
     	bot.editMessageText(text=text, chat_id=chat_id, message_id=message_id)
@@ -236,7 +201,7 @@ def button(bot, update):
     		text="Vale!"
     	else:
     		text="Vaya..."
-    	with open(FILE_RANDOM_RESULTS, "a") as myfile:
+    	with codecs.open(FILE_RANDOM_RESULTS, "a", "utf-8") as myfile:
     		myfile.write("%s\t%s\t%s\t%s\n" % (str(datetime.datetime.now()), identifier, str(chat_id), reply))    	
 
     	bot.editMessageText(text=text, chat_id=chat_id, message_id=message_id)
@@ -249,45 +214,17 @@ def button(bot, update):
     		text="Vale!"
     	else:
     		text="Vaya..."
-    	with open(FILE_NEWS_RESULTS, "a") as myfile:
+    	with codecs.open(FILE_NEWS_RESULTS, "a", "utf-8") as myfile:
     		myfile.write("%s\t%s\t%s\t%s\n" % (str(datetime.datetime.now()), identifier, str(chat_id), reply))    	
     	bot.editMessageText(text=text, chat_id=chat_id, message_id=message_id)
     	logging.info('Usuario %i responde news %s con %s' % (chat_id, identifier, reply))
-
-    #p para los polls
-    elif query.data[0] == 'p':
-    	dummy, identifier = query.data.split(".")
-    	if identifier == 'clase':
-    		bot.editMessageText(text="Lanzando encuesta sobre la última clase", chat_id=chat_id, message_id=message_id)
-    		poll_clase(bot, chat_id)
-    	elif identifier == 'pedir':
-    		bot.editMessageText(text="Ante el vicio de pedir", chat_id=chat_id, message_id=message_id)#
-    	elif identifier == 'solucion':
-    		bot.editMessageText(text="La solución sería", chat_id=chat_id, message_id=message_id)
-
-    #c Para las clases
-    elif query.data[0] == 'c':
-    	dummy, reply = query.data.split(".")
-    	if reply == 'teoria':
-    		text="Más teoría, entendido"
-    	elif reply == 'problemas':
-    		text="Más problemas habrá"
-    	elif reply == 'bien':
-    		text="¡Gracias!"
-    	else:
-    		text="Vaya..."
-    	bot.editMessageText(text=text, chat_id=chat_id, message_id=message_id)
-    	logging.info('Usuario %i responde clase con %s' % (chat_id, reply))
-
-    	with open(FILE_CLASES, "a") as myfile:
-    		myfile.write("%s\t%s\t%s\t%s\n" % (str(datetime.datetime.now()), "Ultclase", str(chat_id), reply))
 
     else:
     	print ('No entiendo')
 
 
 def echo(bot, update):
-    update.message.reply_text('No entiendo. Escriba /help para ayuda' %update.message.text)
+    update.message.reply_text('No entiendo. Escriba /help para ayuda')
 
 def error(bot, update, error):
     logging.warn('Update "%s" caused error "%s"' % (update, error))
@@ -317,34 +254,45 @@ def todays_news(bot,job):
 
 
 
-def polls(bot, update, user_data):
-	user_data['capitulo'] = -1
-	logging.info('Usuario %i comando /polls ' % update.message.chat_id)
 
-	reply_keyboard = [['Valorar última clase'], ["Pedir problema"], ["Solución problema propuesto"], ["Nada"]]
+
+def feedback(bot, update, user_data):
+	user_data['capitulo'] = -1
+	logging.info('Usuario %i comando /feedback ' % update.message.chat_id)
+
+	reply_keyboard = [['Valorar clase','Votar problema'],['Enviar solución','Nada']]
 	#update.message.reply_text('Elige opción:', reply_markup=reply_markup)
-	update.message.reply_text('Elige opción:', reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
+	update.message.reply_text('Qué tipo de feedback quieres dar:', reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
 
 	return TIPO_FEEDBACK
 
 
-def poll_clase(bot, update):
+def feedback_clase(bot, update):
 	#keyboard = [[InlineKeyboardButton("Más teoría", callback_data='c.teoria'),InlineKeyboardButton("Más problemas", callback_data='c.problemas')],
 	#[InlineKeyboardButton("Estuvo bien", callback_data='c.bien'),InlineKeyboardButton("NS/NC", callback_data='c.nsnc')]]
 	#reply_markup = InlineKeyboardMarkup(keyboard)
 	#bot.sendMessage(chat_id=update.message.chat_id, text="Valora la última clase", reply_markup=reply_markup)
-	reply_keyboard = [['Más teoría'], ['Más problemas'], ['Está bien así'], ['Ns/Nc']]
-	update.message.reply_text('Valora la última clase:', reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
+	reply_keyboard = [['Más teoría', 'Más problemas'], ['Está bien así', 'Ns/Nc']]
+	update.message.reply_text('Feedback sobre la última clase:', reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
 	return CLASE_VALORADA
 
-def poll_clase_valorada(bot, update):
+def feedback_clase_valorada(bot, update):
+	global FILE_CLASES
+	chat_id = str(update.message.chat_id)
 	text = update.message.text
-	reply_keyboard = [["Pedir problema"], ["Solución problema propuesto"], ["Nada"]]
+
+
+	#Esto da fallo con el UTF-8
+	logging.info('Usuario %s responde ultclase con %s' % (chat_id, text))
+	with codecs.open(FILE_CLASES, "a", "utf-8") as myfile:
+		myfile.write("%s\t%s\t%s\t%s\n" % (str(datetime.datetime.now()), "ultclase", chat_id, text))
+
+	reply_keyboard = [['Valorar clase','Votar problema'],['Enviar solución','No']]
 	update.message.reply_text('Gracias por la valoración, ¿alguna cosa más?',  reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
 	return TIPO_FEEDBACK
 
 
-def poll_pedir(bot, update, user_data):
+def feedback_votar(bot, update, user_data):
 	numero = update.message.text
 	if (int(user_data['capitulo'])<0):
 		user_data['capitulo']=0
@@ -357,49 +305,180 @@ def poll_pedir(bot, update, user_data):
 		update.message.reply_text('Qué problema', reply_markup=ReplyKeyboardMarkup(reply_keyboard))
 		return PROBLEMA_PEDIDO
 
-def poll_problema_pedido(bot, update, user_data):
+
+def feedback_problema_votado(bot, update, user_data):
+	global FILE_PROBLEMAS
+	chat_id = str(update.message.chat_id)
 	numero = update.message.text
 	user_data['problema']=numero
-	reply_keyboard = [["Pedir otro problema"], ["No"]]
-	update.message.reply_text('Problema %s.%s solicitado, ¿algo más?' %(user_data['capitulo'],user_data['problema']),
+	
+	logging.info('Usuario %s solicita problema %s.%s' % (chat_id, user_data['capitulo'], user_data['problema']))
+	with codecs.open(FILE_PROBLEMAS, "a", "utf-8") as myfile:
+		myfile.write("%s\t%s\t%s-%s\n" % (str(datetime.datetime.now()), chat_id, user_data['capitulo'], user_data['problema']))	
+	
+	reply_keyboard = [['Valorar clase','Votar otro problema'],['Enviar solución','No']]
+	update.message.reply_text('Problema %s.%s solicitado, ¿algo más?' %(user_data['capitulo'], user_data['problema']),
 	  reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
+	
 	user_data['capitulo']=-1	
 	return TIPO_FEEDBACK	
 
 
-def poll_solucion(bot, update, user_data):
+def feedback_solucion(bot, update, user_data):
 	user_data['solucion']=0
-	update.message.reply_text('Escribe la solución del problema propuesto (-1 para cancelar):')
+	update.message.reply_text('Escribe la solución del problema propuesto (xxx para cancelar):')
 	return SOLUCION_A_ENVIAR
 
 
-def poll_solucion_recibida(bot, update, user_data):
+def feedback_solucion_recibida(bot, update, user_data):
 	user_data['solucion'] = update.message.text
-	if user_data['solucion'] == '-1':
-		reply_keyboard = [['Valorar última clase'], ["Pedir problema"], ["Solución problema propuesto"], ["Nada"]]
+	if user_data['solucion'] == 'xxx':
+		reply_keyboard = [['Valorar clase','Votar problema'],['Enviar solución','Nada']]
 		update.message.reply_text('Cancelado. Elija opción:', reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
 		return TIPO_FEEDBACK
 	else:
-		reply_keyboard = [["Sí"], ["No"]]
+		reply_keyboard = [["Sí","No"]]
 		update.message.reply_text('Solución a enviar: %s \n ¿Confirmar?' % user_data['solucion'], 
 			reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
 		return SOLUCION_ENVIADA
 
 
-def poll_solucion_enviada(bot, update, user_data):
+def feedback_solucion_enviada(bot, update, user_data):
 	if update.message.text=='Sí':
-		reply_keyboard = [['Valorar última clase'], ["Pedir problema"], ["Nada"]]
+		reply_keyboard = [['Valorar clase','Votar problema'],['Enviar solución','No']]
 		update.message.reply_text('Solución guardada, ¿alguna cosa más?', reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
 		return TIPO_FEEDBACK
 	else:
-		update.message.reply_text('No se ha guardado la solución. Escribe la solución del problema propuesto (-1 para cancelar):')
+		update.message.reply_text('No se ha guardado la solución. Escribe la solución del problema propuesto (xxx para cancelar):')
 		return SOLUCION_A_ENVIAR
 
 
-def poll_done(bot, update, user_data):
+def feedback_done(bot, update, user_data):
 	update.message.reply_text('Ok!')
 	user_data.clear()
 	return ConversationHandler.END
+
+
+
+
+def settings(bot, update):
+	global users
+	logging.info('Usuario %i comando /settings ' % update.message.chat_id)
+
+	reply_keyboard = ['Resetear contador'],['Cambiar configuración','Nada']
+	update.message.reply_text('Has visto X de Y randomfacts y tienes los avisos (des)activados. Elige opción', reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
+	return TIPO_SETTINGS
+
+
+def settings_reset(bot, update):
+	logging.info('Usuario %i comando /settings-reset ' % update.message.chat_id)
+
+	reply_keyboard = ['Resetear contador'],['Cambiar configuración','No']
+	update.message.reply_text('Registro de randomfacts vistos a 0. ¿Algo más?', reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
+	return TIPO_SETTINGS
+
+
+def settings_config(bot, update):
+	global users
+	logging.info('Usuario %i comando /settings-config ' % update.message.chat_id)
+
+	keyboard = [[InlineKeyboardButton("Sí", callback_data='s.news.si'),
+		InlineKeyboardButton("No", callback_data='s.news.no')]]
+	reply_markup = InlineKeyboardMarkup(keyboard)
+	update.message.reply_text('Recibir notificaciones sobre efemérides y anécdotas relacionada con la asignatura:', reply_markup=reply_markup)
+
+	reply_keyboard = ['Resetear contador'],['Cambiar configuración','No']
+	update.message.reply_text('¿Algo más?', reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
+	return TIPO_SETTINGS
+
+
+
+def settings_done(bot, update):
+	update.message.reply_text('Vale!')
+	return ConversationHandler.END
+
+
+
+
+
+
+def stats(bot, update):
+	global users
+	global FILE_USERS
+	global FILE_LOG
+
+	logging.info('Usuario %i comando /stats ' % update.message.chat_id)
+	
+
+	if int(users[str(update.message.chat_id)][0]):
+		FILE_INFO = 'files/activity_info.log'
+		cmd = "cat " + FILE_LOG + " | grep INFO | grep comando > " + FILE_INFO
+		call(cmd, shell=True)
+
+		df = pd.read_csv(FILE_INFO,sep=' ',header=0,usecols=(0,4,6), names=['date', 'uid', 'command'], parse_dates=['date'])
+		end_date = datetime.date.today()
+		start_date = end_date - datetime.timedelta(days=7)
+		mask = (df['date'] >= start_date ) & (df['date'] <= end_date )
+		df = df.loc[mask]
+
+		update.message.reply_text('Usuarios únicos por día')
+		uni_users=df.groupby('date').uid.nunique()
+		update.message.reply_text('%s' % uni_users.to_string() )
+
+		update.message.reply_text('Actividad por día')
+		activity=df.groupby('date').count()
+		update.message.reply_text('%s' % activity.command.to_string() )
+
+		update.message.reply_text('Usuarios más activos')
+		users_active=df.groupby('uid').count()
+		users_active.sort_values(by='command',ascending=False,inplace=True)
+		update.message.reply_text('%s' % users_active.command.to_string() )
+
+	reply_keyboard = [['Problemas más votados'],['Soluciones correctas'],['Tabla de clasificación'],['Nada']]
+	update.message.reply_text('Qué quieres saber', reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
+	return TIPO_STATS
+
+
+def stats_problems(bot, update):
+	global FILE_PROBLEMAS
+
+	update.message.reply_text('Problemas más votados:')
+	df = pd.read_csv(FILE_PROBLEMAS,sep='\t',header=0,names=['date','uid','prob'])
+	psol = df.groupby('prob').uid.nunique()
+	psol.sort_values(ascending=False,inplace=True)
+	update.message.reply_text('%s' % psol.to_string() )
+
+	reply_keyboard = [['Problemas más votados'],['Soluciones correctas'],['Tabla de clasificación'],['Nada']]
+	update.message.reply_text('¿Algo más?', reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
+	return TIPO_STATS
+
+def stats_solutions(bot, update):
+	reply_keyboard = [['Problemas más votados'],['Soluciones correctas'],['Tabla de clasificación'],['Nada']]
+	update.message.reply_text('Aquí las estadísticas sobre las soluciones hasta ahora. ¿Algo más?', reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
+	return TIPO_STATS
+
+def stats_ranking(bot, update):
+	reply_keyboard = [['Problemas más votados'],['Soluciones correctas'],['Tabla de clasificación'],['Nada']]
+	update.message.reply_text('Aquí viene el ranking de usuarios. ¿Algo más?', reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
+	return TIPO_STATS
+
+
+def stats_done(bot, update):
+	update.message.reply_text('Ok')
+	return ConversationHandler.END
+
+
+
+
+def feedback(bot, update, user_data):
+	user_data['capitulo'] = -1
+	logging.info('Usuario %i comando /feedback ' % update.message.chat_id)
+
+	reply_keyboard = [['Valorar clase','Votar problema'],['Enviar solución','Nada']]
+	#update.message.reply_text('Elige opción:', reply_markup=reply_markup)
+	update.message.reply_text('Qué tipo de feedback quieres:', reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
+
+	return TIPO_FEEDBACK
 
 
 
@@ -414,6 +493,7 @@ def main():
 	global FILE_RANDOM_RESULTS
 	global FILE_LOG
 	global FILE_CLASES
+	global FILE_PROBLEMAS
 
 	
 	# Load configuration parameters
@@ -428,11 +508,16 @@ def main():
 	FILE_RANDOM_RESULTS = config.get('Files', 'randomfacts_results')
 	FILE_LOG = config.get('Files', 'log')
 	FILE_CLASES = config.get('Files', 'clases')
+	FILE_PROBLEMAS = config.get('Files', 'problemas')
 
-	logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s %(levelname)s %(message)s',
-                    filename=FILE_LOG,
-                    filemode='a')
+	#logging.basicConfig(level=logging.INFO,
+    #                format='%(asctime)s %(levelname)s %(message)s',
+    #                filename=FILE_LOG,
+    #                filemode='a', encoding='utf-8')
+	
+	logging.basicConfig(handlers=[logging.FileHandler(FILE_LOG, 'a', 'utf-8')],
+		level=logging.INFO,
+		format='%(asctime)s %(levelname)s %(message)s')
 	logging.getLogger().addHandler(logging.StreamHandler())
 
 	# Global variables
@@ -470,47 +555,80 @@ def main():
 	dp = updater.dispatcher
 
 
-	conv_handler = ConversationHandler(
-		entry_points=[CommandHandler('polls', polls, pass_user_data=True)],
+
+	conv_handler_feedback = ConversationHandler(
+		entry_points=[CommandHandler('feedback', feedback, pass_user_data=True)],
 
 		states={
-			TIPO_FEEDBACK: [RegexHandler('^Valorar última clase$',poll_clase),
-			RegexHandler('^(Pedir problema|Pedir otro problema)$', poll_pedir, pass_user_data=True),
-			RegexHandler('^Solución problema propuesto$',poll_solucion, pass_user_data=True),
-			RegexHandler('^(Nada|No)$',poll_done,pass_user_data=True) 
+			TIPO_FEEDBACK: [RegexHandler('^Valorar clase$', feedback_clase),
+			RegexHandler('^(Votar problema|Votar otro problema)$', feedback_votar, pass_user_data=True),
+			RegexHandler('^Enviar solución$', feedback_solucion, pass_user_data=True),
+			RegexHandler('^(Nada|No)$', feedback_done,pass_user_data=True) 
 			],
 
-			CLASE_VALORADA: [MessageHandler(Filters.text, poll_clase_valorada),
+			CLASE_VALORADA: [MessageHandler(Filters.text, feedback_clase_valorada),
 			],
 
-			PEDIR_PROBLEMA: [MessageHandler(Filters.text, poll_pedir, pass_user_data=True),
+			PEDIR_PROBLEMA: [MessageHandler(Filters.text, feedback_votar, pass_user_data=True),
 			],
 
-			PROBLEMA_PEDIDO: [MessageHandler(Filters.text, poll_problema_pedido, pass_user_data=True),
+			PROBLEMA_PEDIDO: [MessageHandler(Filters.text, feedback_problema_votado, pass_user_data=True),
 			],
 
-			SOLUCION_A_ENVIAR: [MessageHandler(Filters.text, poll_solucion_recibida, pass_user_data=True),
+			SOLUCION_A_ENVIAR: [MessageHandler(Filters.text, feedback_solucion_recibida, pass_user_data=True),
 			],
 
-			SOLUCION_ENVIADA:[MessageHandler(Filters.text, poll_solucion_enviada, pass_user_data=True),
+			SOLUCION_ENVIADA:[MessageHandler(Filters.text, feedback_solucion_enviada, pass_user_data=True),
 			],
 		},
 
-		fallbacks=[RegexHandler('^Done$', poll_done, pass_user_data=True)]
+		fallbacks=[RegexHandler('^(Nada|No)$', feedback_done, pass_user_data=True)]
 	)
+	dp.add_handler(conv_handler_feedback)
 
-	dp.add_handler(conv_handler)
+
+	conv_handler_settings = ConversationHandler(
+		entry_points=[CommandHandler('settings', settings)],
+
+		states={
+			TIPO_SETTINGS: [RegexHandler('^Resetear contador$', settings_reset),
+			RegexHandler('^Cambiar configuración$', settings_config),
+			RegexHandler('^Nada$', settings_done) 
+			],
+		},
+
+		fallbacks=[RegexHandler('^(Nada|No)$', settings_done)]
+	)
+	dp.add_handler(conv_handler_settings)
+
+
+	conv_handler_stats = ConversationHandler(
+		entry_points=[CommandHandler('stats', stats)],
+
+		states={
+			TIPO_STATS: [RegexHandler('^Problemas más votados$', stats_problems),
+			RegexHandler('^Soluciones correctas$', stats_solutions),
+			RegexHandler('^Tabla de clasificación$', stats_ranking),
+			RegexHandler('^Nada$', stats_done) 
+			],
+		},
+
+		fallbacks=[RegexHandler('^(Nada|No)$', stats_done)]
+	)
+	dp.add_handler(conv_handler_stats)
+
+
+
 
 	# on different commands - answer in Telegram
 	dp.add_handler(CommandHandler("admin", admin))
 	dp.add_handler(CommandHandler("alert", alert, pass_args=True))
 	dp.add_handler(CommandHandler("freetext", freetext, pass_args=True))
 	dp.add_handler(CommandHandler("start", start))
-	dp.add_handler(CommandHandler("stats", stats))
+	#dp.add_handler(CommandHandler("stats", stats))
 	dp.add_handler(CommandHandler("help", help))
-	#dp.add_handler(CommandHandler("polls", polls))
 	dp.add_handler(CommandHandler("randomfact", randomfact))
-	dp.add_handler(CommandHandler("settings", settings))
+	#dp.add_handler(CommandHandler("settings", settings))
 	
 
 	dp.add_handler(CallbackQueryHandler(button))
