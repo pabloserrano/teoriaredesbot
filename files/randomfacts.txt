@@ -1,2 +1,0 @@
-5	El lenguaje de programacion funcional Erlang (creado por Ericsson) recibe el nombre de A. K. Erlang (inventor de la intenieria de trafico y la teoria de colas). A veces se piensa que el nombre es una abreviacion de ERicsson LANGuage, debido a su uso intensivo en Ericsson. Esta dualidad es intencional.
-6	Se pueden modelar con una distribucion de Poisson el numero de estrellas en un determinado volumen de espacio, el numero de animales muertos encontrados por unidad de longitud de ruta o la distribucion de receptores visuales en la retina del ojo humano. 
