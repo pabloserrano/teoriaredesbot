@@ -3,12 +3,12 @@ telegram_token = TELEGRAM-TOKEN
 
 [Files]
 log = ./files/activity.log
-
-users = ./files/users.csv
-
+users = ./files/users.txt
 news = ./files/news.txt
 news_results = ./files/news_results.txt
-randomfacts = ./files/randomfacts.txt
-randomfacts_results = ./files/random_results.txt
-
 freetext = ./files/freetext.txt
+clases = ./files/clases.txt
+problemas = ./files/problemas.txt
+soluciones = ./files/soluciones.txt
+soluciones_enviadas = ./files/soluciones_enviadas.txt
+nicks = ./files/nicks.txt
