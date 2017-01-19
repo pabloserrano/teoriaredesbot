@@ -363,7 +363,7 @@ class FeedbackConversationHandler(ConversationHandler):
             user_data['capitulo']=numero
             reply_problema = []
             for problema in config_problemas.options(numero):
-                if not eval(config_problemas.get(numero, problema)):
+                if config_problemas.get(numero, problema) == 'False':
                     reply_problema.append(problema)
             update.message.reply_text(
                 'Qué problema',
@@ -537,7 +537,7 @@ class SettingsConversationHandler(ConversationHandler):
     def settings(self, bot, update):
         chat_id = str(update.message.chat_id)
         logging.info('Usuario %s comando /settings ' % chat_id)
-        if eval(self.tr_bot.users.get(chat_id,'news')):
+        if self.tr_bot.users.get(chat_id,'news') == 'True':
             avisos = 'activados'
         else:
             avisos = 'desactivados'
@@ -699,7 +699,7 @@ class StatsConversationHandler(ConversationHandler):
         votos = dict()
         for capitulo in problemas.sections():
             for problema in problemas.options(capitulo):
-                if not eval(problemas.get(capitulo, problema)):
+                if problemas.get(capitulo, problema) == 'False':
                     prob = str(capitulo)+'.'+str(problema)
                     peticiones = 0
 
