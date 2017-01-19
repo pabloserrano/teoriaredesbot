@@ -14,7 +14,7 @@ import configparser
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, ReplyKeyboardMarkup, ReplyKeyboardHide
 from telegram.ext import (Updater, CommandHandler, ConversationHandler, MessageHandler, Filters, CallbackQueryHandler, RegexHandler, Job)
 import codecs
-import pandas as pd
+#import pandas as pd
 from subprocess import call
 import math
 from dateutil import parser
@@ -22,7 +22,7 @@ from dateutil import parser
 
 TIPO_FEEDBACK, CLASE_VALORADA, PEDIR_PROBLEMA, PROBLEMA_PEDIDO, SOLUCION_A_ENVIAR, SOLUCION_ENVIADA, TEXTO_ENVIADO = range(7)
 
-TIPO_SETTINGS = range(1)
+TIPO_SETTINGS, BORRAR_CONFIRMACION = range(2)
 
 TIPO_STATS = range(1)
 
@@ -30,7 +30,7 @@ REL_TOL = 1e-4
 
 reply_keyboard_feedback = [['Valorar clase','Votar problema'],['Enviar solución','Nada']]
 reply_keyboard_clase = [['Más teoría', 'Más problemas'], ['Está bien así', 'Ns/Nc'], ['Enviar texto libre']]
-reply_keyboard_settings = [['Cambiar configuración'],['Nada']]
+reply_keyboard_settings = [['Cambiar configuración'],['Borrar toda actividad'],['Nada']]
 reply_keyboard_stats = [['Problemas más votados'],['Soluciones correctas'],['Tabla de clasificación'],['Nada']]
 
 def load_calendar( file, calendar ):
@@ -52,21 +52,29 @@ def start(bot, update):
 
 		config_users.add_section(chat_id)
 		config_users.set(chat_id, 'news', 'True')
+		config_users.set(chat_id, 'active', 'True')
 		config_users.set(chat_id, 'admin', 'False')
+		config_users.set(chat_id, 'votados', '')
 		config_users.set(chat_id, 'firstseen', str(datetime.datetime.now()))
+		config_users.set(chat_id, 'lastseen', str(datetime.datetime.now()))
 		
 		nicks = codecs.open(FILE_NICKS, 'r', 'utf-8').read().splitlines()
-		nick = random.choice(nicks)
+		nick_taken = 1
+		while nick_taken == 1:
+			nick, nick_taken = random.choice(nicks).split(",")
+
 		config_users.set(chat_id, 'nick', nick)
-		update.message.reply_text('Hola! Por defecto, notificaciones activadas'
-			'(usa el comando /help para ayuda). Te ha tocado el nick '
-			'%s, puedes usar el comando /start para recordarlo'
+		update.message.reply_text('¡Hola! Por defecto, notificaciones activadas'
+			'(usa el comando /help para ayuda). Te ha tocado el alias '
+			'%s, puedes usar el comando /start para recordarlo '
 			'y para reiniciar el bot si algo va mal' % nick)
 
 		f = codecs.open(FILE_NICKS, 'w', 'utf-8')
 		for line in nicks:
 			if nick not in line:
 				f.write(line+"\n")
+			else:
+				f.write(nick+",1\n")
 		f.close()
 
 		save_config_users(FILE_USERS)
@@ -79,9 +87,24 @@ def start(bot, update):
 
 def help(bot, update):
 	global config_users
+	global FILE_PROPUESTOS
 	chat_id = str(update.message.chat_id)
 
 	logging.info('Usuario %s comando /help ' % chat_id)
+	config_users.set(chat_id, 'lastseen', str(datetime.datetime.now()))
+
+	propuestos = False
+
+	with codecs.open(FILE_PROPUESTOS, 'r', 'utf-8') as myfile:
+		for myline in myfile:
+			(prob, sol) = myline.strip('\n').split("\t")
+			if 'Propuesto' in sol:
+				propuestos = True
+
+	if propuestos == True:
+		texto =  'El enunciado de los problemas propuestos está <a href="http://www.it.uc3m.es/pablo/propuestos.pdf">en este enlace</a>. Comandos:\n\n '
+	else:
+		texto = ''
 
 	texto = texto + ('/feedback Solicitar problemas en clase, valorar la última clase, '
 		'o enviar solución a problemas propuestos\n'
@@ -91,7 +114,7 @@ def help(bot, update):
 		'/stats Ver estadísticas\n'
 		)
 
-	update.message.reply_text(texto)
+	update.message.reply_text(texto, parse_mode='HTML')
 
 
 def button(bot, update):
@@ -99,13 +122,14 @@ def button(bot, update):
     global FILE_USERS
     global FILE_RANDOM_RESULTS
     global FILE_NEWS_RESULTS
-    global FILE_CLASES
+    global FILE_ENCUESTAS
 	
     query = update.callback_query
     chat_id=str(query.message.chat_id)
     message_id=query.message.message_id
 
     logging.info('Usuario %s button %s ' % (chat_id, query.data) )
+    config_users.set(chat_id, 'lastseen', str(datetime.datetime.now()))
 
     #s para los settings
     if query.data[0] == 's':
@@ -140,7 +164,8 @@ def button(bot, update):
 
 
 def echo(bot, update):
-    update.message.reply_text('No entiendo. Escriba /help para ayuda')
+	logging.info('Usuario %i comando raro que no se entiende ' % update.message.chat_id)
+	update.message.reply_text('No entiendo. Escriba /help para ayuda')
 
 
 def error(bot, update, error):
@@ -163,7 +188,8 @@ def todays_news(bot,job):
 				keyboard = [[InlineKeyboardButton("Si", callback_data='n.'+todays_key+'.si'),
 				InlineKeyboardButton("No", callback_data='n.'+todays_key+'.no')]]
 				reply_markup = InlineKeyboardMarkup(keyboard)
-				bot.sendMessage(chat_id=int(key), text='¿Te ha parecido interesante?', reply_markup=reply_markup)
+				bot.sendMessage(chat_id=int(user), text='¿Te ha parecido interesante?', reply_markup=reply_markup)
+	save_config_users(FILE_USERS)
 
 
 def feedback(bot, update, user_data):
@@ -177,51 +203,79 @@ def feedback_clase(bot, update):
 	return CLASE_VALORADA
 
 def feedback_clase_valorada(bot, update):
-	global FILE_CLASES
+	global FILE_ENCUESTAS
 	chat_id = str(update.message.chat_id)
 	text = update.message.text
-	with codecs.open(FILE_CLASES, "a", "utf-8") as myfile:
-		myfile.write("%s\t%s\t%s\t%s\n" % (str(datetime.datetime.now()), "ultclase", chat_id, text))
+	with codecs.open(FILE_ENCUESTAS, "a", "utf-8") as myfile:
+		myfile.write("%s\t%s\t%s\n" % (str(datetime.datetime.now()), chat_id, text))
 	update.message.reply_text('Gracias por la valoración, ¿alguna cosa más?',  reply_markup=ReplyKeyboardMarkup(reply_keyboard_feedback, one_time_keyboard=True))
 	return TIPO_FEEDBACK
 
+
+
 def feedback_votar(bot, update, user_data):
+	global FILE_VOTADOS
+	config_problemas = configparser.ConfigParser()
+	config_problemas.read_file(codecs.open(FILE_VOTADOS, "r", "utf-8"))
+
 	numero = update.message.text
 	if (int(user_data['capitulo'])<0):
 		user_data['capitulo']=0
-		reply_keyboard = [['1','2','3','4'],['5','6','7']]
-		update.message.reply_text('De qué capítulo', reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
+		reply_capitulo = []
+		reply_capitulo.append(config_problemas.sections())
+		#reply_keyboard = [['1','2','3','4'],['5','6','7']]
+		update.message.reply_text('De qué capítulo', reply_markup=ReplyKeyboardMarkup(reply_capitulo, one_time_keyboard=True))
 		return PEDIR_PROBLEMA
 	else:
 		user_data['capitulo']=numero
-		reply_keyboard = [['1','2','3','4','5','6'],['7','8','9','10','11','12'],['13','14','15','16','17','18'],['19','20','21','22','23','24']]
-		update.message.reply_text('Qué problema', reply_markup=ReplyKeyboardMarkup(reply_keyboard))
+		reply_problema = []
+		for problema in config_problemas.options(numero):
+			if not eval(config_problemas.get(numero, problema)):
+				reply_problema.append(problema)
+
+		#reply_keyboard = [['1','2','3','4','5','6'],['7','8','9','10','11','12'],['13','14','15','16','17','18'],['19','20','21','22','23','24']]
+		update.message.reply_text('Qué problema', reply_markup=ReplyKeyboardMarkup(reply_problema))
 		return PROBLEMA_PEDIDO
 
+
 def feedback_problema_votado(bot, update, user_data):
-	global FILE_PROBLEMAS
+	global config_users
+	global FILE_USERS
+
 	chat_id = str(update.message.chat_id)
 	numero = update.message.text
 	user_data['problema']=numero
 	
 	logging.info('Usuario %s solicita problema %s.%s' % (chat_id, user_data['capitulo'], user_data['problema']))
-	with codecs.open(FILE_PROBLEMAS, "a", "utf-8") as myfile:
-		myfile.write("%s\t%s\t%s-%s\n" % (str(datetime.datetime.now()), chat_id, user_data['capitulo'], user_data['problema']))	
+	config_users.set(chat_id, 'lastseen', str(datetime.datetime.now()))
+
+	prob_votados = set(config_users.get(chat_id, 'votados').split(','))
+	votado = user_data['capitulo']+'.'+user_data['problema']
 	
-	update.message.reply_text('Problema %s.%s solicitado, ¿algo más?' %(user_data['capitulo'], user_data['problema']),
-	  reply_markup=ReplyKeyboardMarkup(reply_keyboard_feedback, one_time_keyboard=True))
-	
+	if votado in prob_votados:
+		texto = 'Ya habías votado el problema '+votado+', ¿algo más?'
+	else: 
+		texto = 'Problema '+votado+' votado, ¿algo más?'
+		prob_votados.add(votado)
+		votados_str = ','.join(str(e) for e in prob_votados)
+		config_users.set(chat_id, 'votados', votados_str)
+		save_config_users(FILE_USERS)
+
+	update.message.reply_text(texto,reply_markup=ReplyKeyboardMarkup(reply_keyboard_feedback, one_time_keyboard=True))
+
 	user_data['capitulo']=-1	
 	return TIPO_FEEDBACK	
 
 
+
+
 def feedback_elegir_problema(bot, update, user_data):
-	global FILE_SOLUCIONES
+	global FILE_PROPUESTOS
 	global config_users
 	chat_id = str(update.message.chat_id)
 	propuestos = list()
 
-	with codecs.open(FILE_SOLUCIONES, 'r', 'utf-8') as myfile:
+	with codecs.open(FILE_PROPUESTOS, 'r', 'utf-8') as myfile:
 		for myline in myfile:
 			(prob, sol) = myline.strip('\n').split("\t")
 			if 'Propuesto' in sol:
@@ -234,12 +288,13 @@ def feedback_elegir_problema(bot, update, user_data):
 	else:
 		reply_keyboard_propuestos = []
 		reply_keyboard_propuestos.append(propuestos)
-		update.message.reply_text('Elige problema para enviar solución: ', reply_markup=ReplyKeyboardMarkup(reply_keyboard_propuestos, one_time_keyboard=True))
+		update.message.reply_text('El enunciado de los problemas propuestos está <a href="http://www.it.uc3m.es/pablo/propuestos.pdf">en este enlace</a>. '
+			'Elige problema para enviar solución: ', reply_markup=ReplyKeyboardMarkup(reply_keyboard_propuestos, one_time_keyboard=True), parse_mode='HTML')
 		return TIPO_FEEDBACK
 
 
 def feedback_solucion(bot, update, user_data):
-	global FILE_SOLUCIONES
+	global FILE_PROPUESTOS
 	global config_users
 	chat_id = str(update.message.chat_id)
 	problema = update.message.text
@@ -252,7 +307,7 @@ def feedback_solucion(bot, update, user_data):
 
 	user_data['solucion']=0
 	user_data['prob'] = problema
-	update.message.reply_text(txt)
+	update.message.reply_text(txt, reply_markup=ReplyKeyboardHide())
 	return SOLUCION_A_ENVIAR
 
 
@@ -275,6 +330,7 @@ def feedback_solucion_enviada(bot, update, user_data):
 	global FILE_USERS
 	global config_users
 	chat_id = str(update.message.chat_id)
+	config_users.set(chat_id, 'lastseen', str(datetime.datetime.now()))
 
 	if update.message.text=='Sí':
 		config_users.set(chat_id, user_data['prob'], user_data['solucion'])
@@ -283,7 +339,7 @@ def feedback_solucion_enviada(bot, update, user_data):
 		update.message.reply_text('Solución guardada, ¿alguna cosa más?', reply_markup=ReplyKeyboardMarkup(reply_keyboard_feedback, one_time_keyboard=True))
 		return TIPO_FEEDBACK
 	else:
-		update.message.reply_text('No se ha guardado la solución. Escribe la solución del problema propuesto (xxx para cancelar):')
+		update.message.reply_text('No se ha guardado la solución. Escribe la solución del problema propuesto ("Zzz" para cancelar):', reply_markup=ReplyKeyboardHide())
 		return SOLUCION_A_ENVIAR
 
 def feedback_texto(bot, update):
@@ -291,14 +347,14 @@ def feedback_texto(bot, update):
 	return TEXTO_ENVIADO
 
 def feedback_texto_recibido(bot, update):
-	global FILE_TEXT
-	with codecs.open(FILE_TEXT, "a", "utf-8") as myfile:
+	global FILE_FREETEXT
+	with codecs.open(FILE_FREETEXT, "a", "utf-8") as myfile:
 		myfile.write("%s\t%s\t%s\n" % (str(datetime.datetime.now()), str(update.message.chat_id), str(update.message.text)))
 	update.message.reply_text('Texto guardado. ¿Alguna cosa más?', reply_markup=ReplyKeyboardMarkup(reply_keyboard_feedback, one_time_keyboard=True))
 	return TIPO_FEEDBACK
 
 def feedback_done(bot, update, user_data):
-	update.message.reply_text('Ok!')
+	update.message.reply_text('Ok!', reply_markup=ReplyKeyboardHide())
 	user_data.clear()
 	return ConversationHandler.END
 
@@ -314,8 +370,73 @@ def settings(bot, update):
 		avisos = 'desactivados'
 
 	update.message.reply_text('Tienes los avisos %s. '
-		'Elige si quieres cambiar la configuración o nada' % avisos, reply_markup=ReplyKeyboardMarkup(reply_keyboard_settings, one_time_keyboard=True))
+		'Elige si quieres cambiar la configuración de los avisos, '
+		'borrar toda la actividad (o nada)' % avisos, reply_markup=ReplyKeyboardMarkup(reply_keyboard_settings, one_time_keyboard=True))
 	return TIPO_SETTINGS
+
+def settings_borrar(bot, update):
+	logging.info('Usuario %i comando /settings-borrar ' % update.message.chat_id)
+	update.message.reply_text('Se va a borrar toda la actividad del usuario en el bot. '
+		'Para confirmar, escriba el texto "GUARDIOLA" ', reply_markup=ReplyKeyboardHide())
+	return BORRAR_CONFIRMACION
+
+
+def settings_borrado(bot, update):
+	global config_users
+	global FILE_USERS
+	global FILE_NEWS_RESULTS
+	global FILE_FREETEXT
+	global FILE_ENCUESTAS
+
+	usr = str(update.message.chat_id)
+
+	if update.message.text=='GUARDIOLA':
+		logging.info('Usuario %s borra toda su actividad en el bot ' % update.message.chat_id)
+		
+		# Borrar configuración sobre los problemas propuestos
+		for i in range(3):
+			for j in range(10):
+				prob = 'P'+str(i)+str(j)
+				if config_users.has_option(usr,prob):
+					config_users.remove_option(usr,prob)
+					config_users.remove_option(usr,prob+'timestamp')
+		# Borrar configuración sobre los votados
+		config_users.set(usr, 'votados', '')
+		config_users.set(usr, 'lastseen', str(datetime.datetime.now()))
+		save_config_users(FILE_USERS)
+
+		# Borrar todo feedback en los ficheros: FILE_NEWS_RESULTS, FILE_FREETEXT, FILE_ENCUESTAS,
+		news_results_lines = codecs.open(FILE_NEWS_RESULTS, 'r', 'utf-8').read().splitlines()
+		f = codecs.open(FILE_NEWS_RESULTS, 'w', 'utf-8')
+		for line in news_results_lines:
+			if usr not in line:
+				f.write(line+'\n')
+		f.close()
+
+		freetext_lines = codecs.open(FILE_FREETEXT, 'r', 'utf-8').read().splitlines()
+		f = codecs.open(FILE_FREETEXT, 'w', 'utf-8')
+		for line in news_results_lines:
+			if usr not in line:
+				f.write(line+'\n')
+		f.close()
+
+		freetext_lines = codecs.open(FILE_ENCUESTAS, 'r', 'utf-8').read().splitlines()
+		f = codecs.open(FILE_ENCUESTAS, 'w', 'utf-8')
+		for line in news_results_lines:
+			if usr not in line:
+				f.write(line+'\n')
+		f.close()
+
+
+		update.message.reply_text('Se ha borrado toda la actividad en el bot, '
+			'¿alguna cosa más?', reply_markup=ReplyKeyboardMarkup(reply_keyboard_settings, one_time_keyboard=True))
+
+	else:
+		logging.info('Usuario %s no borra toda la actividad en el bot ' % update.message.chat_id)
+		update.message.reply_text('No se ha borrado la actividad en el bot, '
+			'¿alguna cosa más?', reply_markup=ReplyKeyboardMarkup(reply_keyboard_settings, one_time_keyboard=True))
+	return TIPO_SETTINGS
+
 
 def settings_config(bot, update):
 	logging.info('Usuario %i comando /settings-config ' % update.message.chat_id)
@@ -329,7 +450,7 @@ def settings_config(bot, update):
 	return TIPO_SETTINGS
 
 def settings_done(bot, update):
-	update.message.reply_text('Vale!')
+	update.message.reply_text('Vale!', reply_markup=ReplyKeyboardHide())
 	return ConversationHandler.END
 
 
@@ -345,25 +466,43 @@ def stats(bot, update):
 
 
 def stats_problems(bot, update):
-	global FILE_PROBLEMAS
+	global config_users
+	global FILE_VOTADOS
+	config_problemas = configparser.ConfigParser()
+	config_problemas.read_file(codecs.open(FILE_VOTADOS, "r", "utf-8"))
 
-	update.message.reply_text('Problemas más votados:')
-	df = pd.read_csv(FILE_PROBLEMAS,sep='\t',header=0,names=['date','uid','prob'])
-	psol = df.groupby('prob').uid.nunique()
-	psol.sort_values(ascending=False,inplace=True)
-	update.message.reply_text('%s' % psol.to_string() )
+	votos = dict()
 
+	for capitulo in config_problemas.sections(): 
+		for problema in config_problemas.options(capitulo):
+			if not eval(config_problemas.get(capitulo, problema)):
+				prob = str(capitulo)+'.'+str(problema)
+				peticiones = 0
+
+				for user in config_users.sections():
+					prob_votados = set(config_users.get(user, 'votados').split(','))
+					if prob in prob_votados:
+						peticiones += 1
+
+				if peticiones > 0:
+					votos[prob] = peticiones
+
+	texto = "<b>Top problemas más votados</b>\n"
+	for w in sorted(votos, key=votos.get, reverse=True):
+		texto = texto + str(w) + ' ' + str(votos[w]) + '\n'
+
+	update.message.reply_text(texto, parse_mode='HTML')
 	update.message.reply_text('¿Algo más?', reply_markup=ReplyKeyboardMarkup(reply_keyboard_stats, one_time_keyboard=True))
 	return TIPO_STATS
 
 
 def stats_solutions(bot, update):
-	global FILE_SOLUCIONES
+	global FILE_PROPUESTOS
 	global config_users
 	chat_id = str(update.message.chat_id)
 
 	txt_soluciones = "<b>Soluciones hasta ahora:</b>\n"
-	with codecs.open(FILE_SOLUCIONES, 'r', 'utf-8') as myfile:
+	with codecs.open(FILE_PROPUESTOS, 'r', 'utf-8') as myfile:
 		for myline in myfile:
 			(prob, sol) = myline.split("\t")
 			if 'Propuesto' not in sol:
@@ -385,22 +524,20 @@ def stats_solutions(bot, update):
 
 				txt_soluciones = txt_soluciones + "Respuestas: " + str(respondieron) + " Correctas: " + str(acertaron) + txt_extra
 
-
 	update.message.reply_text(txt_soluciones, parse_mode='HTML')
-
 	update.message.reply_text('¿Algo más?', reply_markup=ReplyKeyboardMarkup(reply_keyboard_stats, one_time_keyboard=True))
 	return TIPO_STATS
 
 
 def stats_ranking(bot, update):
-	global FILE_SOLUCIONES
+	global FILE_PROPUESTOS
 	global config_users
 	chat_id = str(update.message.chat_id)
 	MAX_LINES = 3
 
 	soluciones = dict()
 
-	with codecs.open(FILE_SOLUCIONES, 'r', 'utf-8') as myfile:
+	with codecs.open(FILE_PROPUESTOS, 'r', 'utf-8') as myfile:
 		for myline in myfile:
 			(prob, sol) = myline.strip('\n').split("\t")
 			if 'Propuesto' not in sol:
@@ -431,10 +568,13 @@ def stats_ranking(bot, update):
 			if config_users.has_option(user,prob):
 				sol_enviada = float(config_users.get(user,prob).replace(",","."))
 				if  math.isclose(sol_correcta, sol_enviada, rel_tol = REL_TOL):
-					ts_sol = parser.parse(config_users.get(user,prob+'timestamp'))
-					points_extra = (ts_last - ts_sol).days*24*60 + (ts_last - ts_sol).seconds/60
-					points_extra = points_extra/prob_delta_minutes
-					puntos[user] += 1.0 + points_extra
+					if prob_delta_minutes > 0:
+						ts_sol = parser.parse(config_users.get(user,prob+'timestamp'))
+						points_extra = (ts_last - ts_sol).days*24*60 + (ts_last - ts_sol).seconds/60
+						points_extra = points_extra/prob_delta_minutes
+						puntos[user] += 1.0 + points_extra
+					else:
+						puntos[user] += 2.0 
 
 	user_is_top = 0
 	i = 1
@@ -488,34 +628,33 @@ def save_config_users( file ):
 
 def main():
 	global config_users
+
 	global calendar
+	global FILE_LOG
 	global FILE_USERS
-	global FILE_TEXT
 	global FILE_NEWS
 	global FILE_NEWS_RESULTS
-	global FILE_RANDOM
-	global FILE_RANDOM_RESULTS
-	global FILE_LOG
-	global FILE_CLASES
-	global FILE_PROBLEMAS
-	global FILE_SOLUCIONES
+	global FILE_FREETEXT
+	global FILE_ENCUESTAS
+	global FILE_PROPUESTOS
 	global FILE_NICKS
-	global DIR_PROBLEMAS
+	global FILE_VOTADOS
 
 	
 	# Load configuration parameters
 	config = configparser.ConfigParser()
 	config.readfp(open(r'config.txt'))
 	TELEGRAM_TOKEN = config.get('Tokens', 'telegram_token')
+	FILE_LOG = config.get('Files', 'log')
 	FILE_USERS = config.get('Files', 'users')
+	FILE_NICKS = config.get('Files', 'nicks')
 	FILE_NEWS = config.get('Files', 'news')
 	FILE_NEWS_RESULTS = config.get('Files', 'news_results')
-	FILE_TEXT = config.get('Files', 'freetext')
-	FILE_LOG = config.get('Files', 'log')
-	FILE_CLASES = config.get('Files', 'clases')
-	FILE_PROBLEMAS = config.get('Files', 'problemas')
-	FILE_SOLUCIONES = config.get('Files', 'soluciones')
-	FILE_NICKS = config.get('Files', 'nicks')
+	FILE_PROPUESTOS = config.get('Files', 'propuestos')
+	FILE_ENCUESTAS = config.get('Files', 'encuestas')
+	FILE_FREETEXT = config.get('Files', 'freetext')
+	
+	FILE_VOTADOS = config.get('Files', 'votados')
 
 	#logging.basicConfig(level=logging.INFO,
     #                format='%(asctime)s %(levelname)s %(message)s',
@@ -593,8 +732,12 @@ def main():
 
 		states={
 			TIPO_SETTINGS: [RegexHandler('^Cambiar configuración$', settings_config),
+			RegexHandler('^Borrar toda actividad$', settings_borrar),
 			RegexHandler('^Nada$', settings_done) 
 			],
+
+			BORRAR_CONFIRMACION: [MessageHandler(Filters.text, settings_borrado), 
+			]
 		},
 
 		fallbacks=[RegexHandler('^(Nada|No)$', settings_done), 
@@ -644,3 +787,6 @@ def main():
 
 if __name__ == '__main__':
 	main()
+
+
+
