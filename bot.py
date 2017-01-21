@@ -100,7 +100,8 @@ class TRBot:
         jq.put(job_avisos, next_t=0)
 
     def avisos(self, bot, job):
-        logging.info('Se mira si hay avisos')
+        # Es buen keep alive pero too many 
+        # logging.info('Se mira si hay avisos')
         # De paso, leo el fichero de configuracion otra vez
         self.users.read_file(codecs.open(self.file_users, "r", "utf-8"))
 
