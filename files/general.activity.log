@@ -1,0 +1,17 @@
+2017-01-21 10:14:06,943 INFO STATS [666] [reinicia]
+2017-01-21 10:14:07,030 INFO STATS [666] [reinicia]
+2017-01-21 10:14:54,907 INFO STATS [666] [help]
+2017-01-21 10:14:58,625 INFO STATS [666] [opinar]
+2017-01-21 10:15:00,296 INFO STATS [666] [texto]
+2017-01-21 10:15:12,569 INFO STATS [666] [texto-recibido] Prueba de texto libre nanananaana \n \n \t nananana
+2017-01-21 10:15:18,578 INFO STATS [666] [opinar-fin]
+2017-01-21 10:17:05,788 WARNING Exiting immediately!
+2017-01-21 10:17:09,600 INFO El bot arranca
+2017-01-21 10:17:09,601 INFO Se mira si hay avisos
+2017-01-21 10:17:09,608 INFO Starting new HTTPS connection (1): api.pushover.net
+2017-01-21 10:22:09,603 INFO Se mira si hay avisos
+2017-01-21 10:22:09,605 INFO Hay un aviso
+2017-01-21 10:22:10,364 INFO Hay un aviso
+2017-01-21 10:22:10,819 INFO Hay un aviso
+2017-01-21 10:27:11,275 INFO Se mira si hay avisos
+2017-01-21 10:32:11,278 INFO Se mira si hay avisos
