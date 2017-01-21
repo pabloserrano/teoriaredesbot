@@ -1,0 +1,16 @@
+[666]
+news = True
+nick = Fulano
+admin = True
+ignore = False
+votados = ,4.11,6.9
+p04 = 40,00
+p04timestamp = 2017-01-20 23:51:24.150130
+
+[123]
+admin = False
+news = True
+nick = Kleinrock
+ignore = True
+votados = ,1.1
+
