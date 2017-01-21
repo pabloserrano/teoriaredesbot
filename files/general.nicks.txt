@@ -1,0 +1,8 @@
+Fourier,1
+Kurose,0
+Erlang,1
+Poisson,1
+Faraday,0
+Fulano,0
+Mengano,1
+Zutano,0
