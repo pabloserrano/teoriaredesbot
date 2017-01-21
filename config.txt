@@ -1,14 +1,27 @@
 [Tokens]
-telegram_token = TELEGRAM-TOKEN
+tokenBot = TELEGRAM_TOKEN
 
-[Files]
-log = ./files/activity.log
-users = ./files/users.txt
-news = ./files/news.txt
-news_results = ./files/news_results.txt
-freetext = ./files/freetext.txt
-clases = ./files/clases.txt
-problemas = ./files/problemas.txt
-soluciones = ./files/soluciones.txt
-soluciones_enviadas = ./files/soluciones_enviadas.txt
-nicks = ./files/nicks.txt
+[General]
+log = ./files/general.activity.log
+users = ./files/general.users.txt
+nicks = ./files/general.nicks.txt
+avisos = ./files/general.avisos.txt
+
+[Noticias]
+texto = ./files/news.texto.txt
+votos = ./files/news.votos.txt
+
+[Opinar]
+votos = ./files/opinar.votos.txt
+texto = ./files/opinar.texto.txt
+listaclases = ./files/opinar.listaclases.txt
+
+[Pedir]
+problemas = ./files/pedir.problemas.txt
+
+[Reto]
+propuestos = ./files/reto.propuestos.txt
+
+[Pushover]
+key = PUSHOVER_KEY
+api = PUSHOVER_API
