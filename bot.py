@@ -100,7 +100,6 @@ class TRBot:
         jq.put(job_avisos, next_t=0)
 
     def avisos(self, bot, job):
-        # Es buen keep alive pero too many 
         # logging.info('Se mira si hay avisos')
         # De paso, leo el fichero de configuracion otra vez
         self.users.read_file(codecs.open(self.file_users, "r", "utf-8"))
@@ -142,7 +141,7 @@ class TRBot:
             for myline in myfile:
                 (date, text) = myline.split("\t")
                 if date == today:
-                    logging.info('Hay una noticia')
+                    logging.info('Hay una noticia. A enviar. ')
                     for user in self.users.sections():
                         if self.users.get(user, 'news') == 'True':
                             bot.sendMessage(chat_id=int(user),
@@ -263,10 +262,10 @@ class TRBot:
         elif query.data[0] == 'n':
             dummy, identifier, reply = query.data.split(".")
             if reply == 'si':
-                logging.info('STATS [%s] [noticia-interesa] %i ' % (chat_id, identifier))
+                logging.info('STATS [%s] [noticia-interesa] %s ' % (chat_id, identifier))
                 text = "Vale!"
             else:
-                logging.info('STATS [%s] [noticia-no-interesa] %i ' % (chat_id, identifier))
+                logging.info('STATS [%s] [noticia-no-interesa] %s ' % (chat_id, identifier))
                 text = "Vaya..."
             with codecs.open(self.file_news_votos, "a", "utf-8") as myfile:
                 myfile.write("%s\t%s\t%s\t%s\t%s\n"
