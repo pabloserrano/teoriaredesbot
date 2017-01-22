@@ -781,7 +781,7 @@ class PedirConversationHandler(ConversationHandler):
             prob_set = []
             user_data['capitulo'] = numero
             for problema in problemas.options(numero):
-                if not eval(problemas.get(numero, problema)):
+                if eval(problemas.get(numero, problema)) == 'False':
                     prob_set.append(problema)
             kb_problema = []
             FILAS_DE_BOTONES = 3
@@ -825,7 +825,7 @@ class PedirConversationHandler(ConversationHandler):
         votos = dict()
         for capitulo in problemas.sections():
             for problema in problemas.options(capitulo):
-                if not eval(problemas.get(capitulo, problema)):
+                if eval(problemas.get(capitulo, problema)) == 'False':
                     prob = str(capitulo) + '.' + str(problema)
                     peticiones = 0
 
