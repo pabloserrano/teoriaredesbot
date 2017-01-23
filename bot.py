@@ -347,7 +347,7 @@ class OpinarConversationHandler(ConversationHandler):
 
     def opinar_votar(self, bot, update):
         chat_id = str(update.message.chat_id)
-        logging.info('STATS [%s] [votar]' % chat_id)   
+        logging.info('STATS [%s] [votar]' % chat_id) 
         update.message.reply_text(
             'Opinión sobre la última clase:',
             reply_markup=ReplyKeyboardMarkup(self.kb_votos,
@@ -702,6 +702,7 @@ class PedirConversationHandler(ConversationHandler):
     kb_pedir = [
         ['Pedir problema'],
         ['Ver más pedidos'],
+        ['Listar resueltos'],
         ['Nada']
     ]
 
@@ -721,6 +722,9 @@ class PedirConversationHandler(ConversationHandler):
                     RegexHandler('^Ver más pedidos$',
                                  self.pedir_stats,
                                  pass_user_data=True),
+                    RegexHandler('^Listar resueltos$',
+                                 self.pedir_listar,
+                                 pass_user_data=True),     
                     RegexHandler('^(Nada|No)$',
                                  self.pedir_fin,
                                  pass_user_data=True)
@@ -842,6 +846,30 @@ class PedirConversationHandler(ConversationHandler):
         texto = "<b>Problemas más pedidos</b>\n"
         for w in sorted(votos, key=votos.get, reverse=True):
             texto = texto + str(w) + ' ' + str(votos[w]) + '\n'
+        update.message.reply_text(texto, parse_mode='HTML')
+        update.message.reply_text(
+            '¿Algo más?',
+            reply_markup=ReplyKeyboardMarkup(self.kb_pedir,
+                                             one_time_keyboard=True))
+        return self.PEDIR_ENTRADA
+
+    def pedir_listar(self, bot, update, user_data):
+        chat_id = str(update.message.chat_id)
+        logging.info('STATS [%s] [pedir-listar]' % chat_id)
+
+        problemas = configparser.ConfigParser()
+        problemas.read_file(
+            codecs.open(self.tr_bot.file_pedir_probs, "r", "utf-8"))
+
+        texto = "Listado de problemas ya resueltos en case: \n"
+        for capitulo in problemas.sections():
+            txt_tmp = ''
+            for problema in problemas.options(capitulo):
+                if problemas.get(capitulo, problema) == 'True':
+                    txt_tmp += str(capitulo) + '.' + str(problema) + ' '
+            if txt_tmp:
+                texto += 'Tema ' + capitulo + ': ' + txt_tmp + '\n'
+
         update.message.reply_text(texto, parse_mode='HTML')
         update.message.reply_text(
             '¿Algo más?',
