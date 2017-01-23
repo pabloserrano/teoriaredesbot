@@ -129,6 +129,7 @@ class TRBot:
         # Calculo segundos hasta Hora de las news
         now = datetime.datetime.now()
         time_news = now.replace(hour=10, minute=0, second=0, microsecond=0)
+        #time_news = now.replace(hour=18, minute=5, second=0, microsecond=0)
         seconds = (time_news - now).total_seconds()
         if seconds < 0:
             seconds = seconds + 24 * 60 * 60
@@ -781,7 +782,7 @@ class PedirConversationHandler(ConversationHandler):
             prob_set = []
             user_data['capitulo'] = numero
             for problema in problemas.options(numero):
-                if eval(problemas.get(numero, problema)) == 'False':
+                if problemas.get(numero, problema) == 'False':
                     prob_set.append(problema)
             kb_problema = []
             FILAS_DE_BOTONES = 3
@@ -825,7 +826,7 @@ class PedirConversationHandler(ConversationHandler):
         votos = dict()
         for capitulo in problemas.sections():
             for problema in problemas.options(capitulo):
-                if eval(problemas.get(capitulo, problema)) == 'False':
+                if problemas.get(capitulo, problema) == 'False':
                     prob = str(capitulo) + '.' + str(problema)
                     peticiones = 0
 
