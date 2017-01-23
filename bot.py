@@ -345,6 +345,9 @@ class OpinarConversationHandler(ConversationHandler):
                     RegexHandler('^Enviar texto libre$',
                                  self.opinar_votar_texto,
                                  pass_user_data=True),
+                    RegexHandler('^Volver$',
+                                 self.opinar_fin,
+                                 pass_user_data=True),
                     MessageHandler(Filters.text,
                                    self.opinar_voto_recibido,
                                    pass_user_data=True),
@@ -506,6 +509,8 @@ class RetoConversationHandler(ConversationHandler):
                              pass_user_data=True),
                 MessageHandler(Filters.text,
                                self.reto_error, pass_user_data=True),
+                MessageHandler(Filters.command,
+                               self.reto_error, pass_user_data=True),
             ]
         )
 
@@ -613,6 +618,19 @@ class RetoConversationHandler(ConversationHandler):
         chat_id = str(update.message.chat_id)
         problema = update.message.text
         logging.info('STATS [%s] [reto-enviar] %s' % (chat_id, problema))
+
+        propuestos = list()
+        with codecs.open(self.tr_bot.file_reto_probs, 'r', 'utf-8') as myfile:
+            for myline in myfile:
+                (prob, sol) = myline.strip('\n').split("\t")
+                if 'Propuesto' in sol:
+                    propuestos.append(prob)
+
+        print(problema)
+        print(propuestos)
+        if problema not in propuestos:
+            # Quiere mandar solución a problema ya resuelto
+            return self.reto_error(bot, update, user_data)
 
         if self.tr_bot.users.has_option(chat_id, problema):
             txt = ('Para el problema ' + problema + ' ya tenías la solución ' +
@@ -979,11 +997,9 @@ class PedirConversationHandler(ConversationHandler):
 class SettingsConversationHandler(ConversationHandler):
 
     TIPO_SETTINGS = 1
-    BORRAR_CONFIRMACION = 2
 
     kb_settings = [
         ['Cambiar configuración'],
-        ['Borrar toda actividad'],
         ['Volver']
     ]
 
@@ -996,12 +1012,7 @@ class SettingsConversationHandler(ConversationHandler):
                 self.TIPO_SETTINGS: [
                     RegexHandler('^Cambiar configuración$',
                                  self.settings_config),
-                    RegexHandler('^Borrar toda actividad$',
-                                 self.settings_borrar),
                 ],
-                self.BORRAR_CONFIRMACION: [
-                    MessageHandler(Filters.text, self.settings_borrado),
-                ]
             },
             fallbacks=[
                 RegexHandler('^Volver$',
@@ -1025,74 +1036,6 @@ class SettingsConversationHandler(ConversationHandler):
             % avisos,
             reply_markup=ReplyKeyboardMarkup(self.kb_settings,
                                              one_time_keyboard=True))
-        return self.TIPO_SETTINGS
-
-    def settings_borrar(self, bot, update):
-        chat_id = str(update.message.chat_id)
-        logging.info('STATS [%s] [settings-borrar]' % chat_id)
-        update.message.reply_text(
-            'Se va a borrar toda la actividad del usuario en el bot. '
-            'Para confirmar, escriba el texto "GUARDIOLA" ',
-            reply_markup=ReplyKeyboardHide())
-        return self.BORRAR_CONFIRMACION
-
-    def settings_borrado(self, bot, update):
-        chat_id = str(update.message.chat_id)
-        if update.message.text == 'GUARDIOLA':
-            logging.info('STATS [%s] [settings-borrado-completo]' % chat_id)
-
-            # Borrar configuración sobre los problemas propuestos
-            for i in range(3):
-                for j in range(10):
-                    pr = 'P' + str(i) + str(j)
-                    if self.tr_bot.users.has_option(chat_id, pr):
-                        self.tr_bot.users.remove_option(chat_id, pr)
-                        self.tr_bot.users.remove_option(chat_id, pr + 'timestamp')
-            # Borrar configuración sobre los votados
-            self.tr_bot.users.set(chat_id, 'votados', '')
-            self.tr_bot.save_config_users()
-
-            # Borrar todo feedback en los ficheros: FILE_NEWS_RESULTS,
-            #     FILE_FREETEXT, file_opinar_votos,
-            news_results_lines = \
-                codecs.open(self.tr_bot.file_news_votos, 'r', 'utf-8')\
-                .read()\
-                .splitlines()
-            f = codecs.open(self.tr_bot.file_news_votos, 'w', 'utf-8')
-            for line in news_results_lines:
-                if chat_id not in line:
-                    f.write(line + '\n')
-            f.close()
-            freetext_lines = \
-                codecs.open(self.tr_bot.file_opinar_texto, 'r', 'utf-8')\
-                .read()\
-                .splitlines()
-            f = codecs.open(self.tr_bot.file_opinar_texto, 'w', 'utf-8')
-            for line in freetext_lines:
-                if chat_id not in line:
-                    f.write(line + '\n')
-            f.close()
-            encuestas_lines = \
-                codecs.open(self.tr_bot.file_opinar_votos, 'r', 'utf-8')\
-                .read()\
-                .splitlines()
-            f = codecs.open(self.tr_bot.file_opinar_votos, 'w', 'utf-8')
-            for line in encuestas_lines:
-                if chat_id not in line:
-                    f.write(line + '\n')
-            f.close()
-            update.message.reply_text(
-                'Se ha borrado toda la actividad en el bot, '
-                '¿alguna cosa más?',
-                reply_markup=ReplyKeyboardMarkup(self.kb_settings,
-                                                 one_time_keyboard=True))
-        else:
-            logging.info('STATS [%s] [settings-borrado-no]' % chat_id)
-            update.message.reply_text(
-                'No se ha borrado la actividad en el bot, '
-                '¿alguna cosa más?',
-                reply_markup=ReplyKeyboardMarkup(self.kb_settings,
-                                                 one_time_keyboard=True))
         return self.TIPO_SETTINGS
 
     def settings_config(self, bot, update):
