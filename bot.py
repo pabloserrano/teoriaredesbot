@@ -45,7 +45,7 @@ class TRBot:
         self.file_news_votos = config.get('Noticias', 'votos')
         # Bloque Opinar sobre clases
         self.file_opinar_texto = config.get('Opinar', 'texto')
-        self.file_opinar_votos = config.get('Opinar', 'votos')
+        self.file_opinar_clase = config.get('Opinar', 'clase')
         # Bloque Pedir problemas a hacer en clase
         self.file_pedir_probs = config.get('Pedir', 'problemas')
         # Bloque Reto hacer problemas
@@ -83,7 +83,7 @@ class TRBot:
     def run(self):
         logging.info('El bot arranca')
         self.updater.start_polling()
-        self.po_client.send_message("Se acaba de arrancar el bot", title="Inicio bot")
+        # self.po_client.send_message("Se acaba de arrancar el bot", title="Inicio bot")
 
         # Run the bot until the you presses Ctrl-C
         # or the process receives SIGINT,
@@ -128,7 +128,7 @@ class TRBot:
         # Calculo segundos hasta Hora de las news
         now = datetime.datetime.now()
         time_news = now.replace(hour=10, minute=0, second=0, microsecond=0)
-        #time_news = now.replace(hour=18, minute=5, second=0, microsecond=0)
+        # time_news = now.replace(hour=18, minute=5, second=0, microsecond=0)
         seconds = (time_news - now).total_seconds()
         if seconds < 0:
             seconds = seconds + 24 * 60 * 60
@@ -210,9 +210,9 @@ class TRBot:
             self.users.set(chat_id, 'nick', nick)
             update.message.reply_text(
                 '¡Hola! Por defecto, noticias y curiosidades activadas '
-                '(usa el comando /help para ayuda). Te ha tocado el nick '
-                '%s, puedes usar el comando /start para recordarlo '
-                'y para reiniciar el bot si algo va mal' % nick)
+                '(usa el comando /help para ayuda). Te ha tocado el nick ' +
+                nick + ', puedes usar el comando /start para recordarlo '
+            )
             self.save_config_users()
         else:
             logging.info('STATS [%s] [reinicia]' % chat_id)
@@ -220,7 +220,7 @@ class TRBot:
                 'Hola de nuevo, tu nick es %s'
                 % self.users.get(chat_id, 'nick'),
                 reply_markup=ReplyKeyboardHide())
-            return ConversationHandler.END
+            # return ConversationHandler.END
 
     def help(self, bot, update):
         chat_id = str(update.message.chat_id)
@@ -228,13 +228,13 @@ class TRBot:
 
         texto = (
             '/help Muestra este mensaje\n'
-            '/opinar Valorar última clase, enviar texto libre\n'
+            '/opinar Valorar última clase, comentarios sobre el bot\n'
             '/pedir Votar para que se resuelvan problemas en clase, '
             'ver más votados, listar problemas ya resueltos en clase\n'
             '/reto Participar en el reto: ver problemas propuestos, '
             'enviar solución, ver soluciones, ver clasificación\n'
             '/settings Cambiar configuración\n'
-            '/start Reiniciar el bot\n'
+            '/start Recordar el nick\n'
         )
         update.message.reply_text(texto, parse_mode='HTML')
 
@@ -291,12 +291,14 @@ class OpinarConversationHandler(ConversationHandler):
 
     kb_opinar = [
         ['Valorar última clase'],
-        ['Enviar texto libre'],
-        ['Nada']
+        ['Comentarios sobre el bot'],
+        ['Volver']
     ]
     kb_votos = [
-        ['Más teoría', 'Más problemas'],
-        ['Está bien así', 'Ns/Nc']
+        ['Muy difícil', 'Muy fácil'],
+        ['Está bien así'],
+        ['Enviar texto libre'],
+        ['Volver'],
     ]
 
     def __init__(self, tr_bot):
@@ -310,16 +312,17 @@ class OpinarConversationHandler(ConversationHandler):
                 self.OPINAR_ENTRADA: [
                     RegexHandler('^Valorar última clase$',
                                  self.opinar_votar),
-                    RegexHandler('^Enviar texto libre$',
+                    RegexHandler('^Comentarios sobre el bot$',
                                  self.opinar_texto,
                                  pass_user_data=True),
-                    RegexHandler('^(Nada|No)$',
-                                 self.opinar_fin,
-                                 pass_user_data=True)
                 ],
                 self.OPINAR_VOTADO: [
+                    RegexHandler('^Enviar texto libre$',
+                                 self.opinar_votar_texto,
+                                 pass_user_data=True),
                     MessageHandler(Filters.text,
-                                   self.opinar_voto_recibido),
+                                   self.opinar_voto_recibido,
+                                   pass_user_data=True),
                 ],
                 self.OPINAR_TEXTO: [
                     MessageHandler(Filters.text,
@@ -327,14 +330,16 @@ class OpinarConversationHandler(ConversationHandler):
                 ]
             },
             fallbacks=[
-                RegexHandler('^(Nada|No)$',
+                RegexHandler('^Volver$',
                              self.opinar_fin,
                              pass_user_data=True),
-                CommandHandler('start', self.tr_bot.start)
+                MessageHandler(Filters.text,
+                               self.opinar_error, pass_user_data=True),
             ]
         )
 
     def opinar(self, bot, update, user_data):
+        user_data['textolibre'] = False
         chat_id = str(update.message.chat_id)
         logging.info('STATS [%s] [opinar]' % chat_id)
         user_data['capitulo'] = -1
@@ -345,25 +350,44 @@ class OpinarConversationHandler(ConversationHandler):
         return self.OPINAR_ENTRADA
 
     def opinar_votar(self, bot, update):
-        chat_id = str(update.message.chat_id)
-        logging.info('STATS [%s] [votar]' % chat_id)
+        # chat_id = str(update.message.chat_id)
+        # logging.info('STATS [%s] [opinar-clase]' % chat_id)
         update.message.reply_text(
             'Opinión sobre la última clase:',
             reply_markup=ReplyKeyboardMarkup(self.kb_votos,
                                              one_time_keyboard=True))
         return self.OPINAR_VOTADO
 
-    def opinar_voto_recibido(self, bot, update):
+    def opinar_votar_texto(self, bot, update, user_data):
+        user_data['textolibre'] = True
+        # chat_id = str(update.message.chat_id)
+        # logging.info('STATS [%s] [opinar-clase-t]' % chat_id)
+        update.message.reply_text(
+            'Texto libre sobre la última clase:')
+        return self.OPINAR_VOTADO
+
+    def opinar_voto_recibido(self, bot, update, user_data):
         chat_id = str(update.message.chat_id)
         text = update.message.text
-        logging.info('STATS [%s] [voto-recibido] %s' % (chat_id, text))
-        with codecs.open(
-                self.tr_bot.file_opinar_votos, "a", "utf-8") as myfile:
-            myfile.write("%s\t%s\t%s\t%s\n"
-                         % (str(datetime.datetime.now()),
-                            chat_id,
-                            self.tr_bot.users.get(chat_id, 'nick'),
-                            text))
+        if not user_data['textolibre']:
+            logging.info('STATS [%s] [opinar-case-voto] %s' % (chat_id, text))
+            with codecs.open(
+                    self.tr_bot.file_opinar_clase, "a", "utf-8") as myfile:
+                myfile.write("%s\t%s\t%s\t[VOTO]\t%s\n"
+                             % (str(datetime.datetime.now()),
+                                chat_id,
+                                self.tr_bot.users.get(chat_id, 'nick'),
+                                text))
+        else:
+            logging.info('STATS [%s] [opinar-case-texto] %s' % (chat_id, text))
+            with codecs.open(
+                    self.tr_bot.file_opinar_clase, "a", "utf-8") as myfile:
+                myfile.write("%s\t%s\t%s\t[TEXTO]\t%s\n"
+                             % (str(datetime.datetime.now()),
+                                chat_id,
+                                self.tr_bot.users.get(chat_id, 'nick'),
+                                text))
+
         update.message.reply_text(
             'Gracias por la valoración, ¿alguna cosa más?',
             reply_markup=ReplyKeyboardMarkup(self.kb_opinar,
@@ -371,15 +395,15 @@ class OpinarConversationHandler(ConversationHandler):
         return self.OPINAR_ENTRADA
 
     def opinar_texto(self, bot, update, user_data):
-        chat_id = str(update.message.chat_id)
-        logging.info('STATS [%s] [texto]' % chat_id)
-        update.message.reply_text('Texto libre para enviar:')
+        # chat_id = str(update.message.chat_id)
+        # logging.info('STATS [%s] [opinar-bot]' % chat_id)
+        update.message.reply_text('Comentario sobre el bot:')
         return self.OPINAR_TEXTO
 
     def opinar_texto_recibido(self, bot, update):
         chat_id = str(update.message.chat_id)
         text = update.message.text
-        logging.info('STATS [%s] [texto-recibido] %s' % (chat_id, text))
+        logging.info('STATS [%s] [opinar-bot] %s' % (chat_id, text))
         with codecs.open(self.tr_bot.file_opinar_texto,
                          "a", "utf-8") as myfile:
             myfile.write("%s\t%s\t%s\t%s\n"
@@ -388,7 +412,7 @@ class OpinarConversationHandler(ConversationHandler):
                             self.tr_bot.users.get(chat_id, 'nick'),
                             text))
         update.message.reply_text(
-            'Texto guardado. ¿Alguna cosa más?',
+            'Comentario guardado, ¿alguna cosa más?',
             reply_markup=ReplyKeyboardMarkup(self.kb_opinar,
                                              one_time_keyboard=True))
         return self.OPINAR_ENTRADA
@@ -397,6 +421,18 @@ class OpinarConversationHandler(ConversationHandler):
         chat_id = str(update.message.chat_id)
         logging.info('STATS [%s] [opinar-fin]' % chat_id)
         update.message.reply_text('Ok!', reply_markup=ReplyKeyboardHide())
+        user_data.clear()
+        return ConversationHandler.END
+
+    def opinar_error(self, bot, update, user_data):
+        chat_id = str(update.message.chat_id)
+        text = update.message.text
+        logging.info('STATS [%s] [opinar-error] %s' % (chat_id, text))
+        txt = (
+            'Parece que hubo un error, usa /help para ver la ayuda '
+            'e intenta emplear únicamente los comandos propuestos. '
+        )
+        update.message.reply_text(txt, reply_markup=ReplyKeyboardHide())
         user_data.clear()
         return ConversationHandler.END
 
@@ -409,7 +445,7 @@ class RetoConversationHandler(ConversationHandler):
     kb_reto = [
         ['Ver enunciados', 'Ver soluciones'],
         ['Enviar solución', 'Clasificación'],
-        ['Nada']
+        ['Volver']
     ]
 
     def __init__(self, tr_bot):
@@ -432,8 +468,6 @@ class RetoConversationHandler(ConversationHandler):
                                  pass_user_data=True),
                     RegexHandler('^Clasificación$',
                                  self.reto_clasificacion),
-                    RegexHandler('^Nada$',
-                                 self.reto_fin)
                 ],
                 self.RETO_RECIBIDA: [
                     MessageHandler(Filters.text,
@@ -441,8 +475,13 @@ class RetoConversationHandler(ConversationHandler):
                                    pass_user_data=True),
                 ]
             },
-            fallbacks=[RegexHandler('^(Nada|No)$', self.reto_fin),
-                       CommandHandler('start', self.tr_bot.start)]
+            fallbacks=[
+                RegexHandler('^Volver$',
+                             self.reto_fin,
+                             pass_user_data=True),
+                MessageHandler(Filters.text,
+                               self.reto_error, pass_user_data=True),
+            ]
         )
 
     def reto(self, bot, update, user_data):
@@ -685,10 +724,23 @@ class RetoConversationHandler(ConversationHandler):
                                              one_time_keyboard=True))
         return self.RETO_ENTRADA
 
-    def reto_fin(self, bot, update):
+    def reto_fin(self, bot, update, user_data):
         chat_id = str(update.message.chat_id)
         logging.info('STATS [%s] [reto-fin]' % chat_id)
+        user_data.clear()
         update.message.reply_text('Ok', reply_markup=ReplyKeyboardHide())
+        return ConversationHandler.END
+
+    def reto_error(self, bot, update, user_data):
+        chat_id = str(update.message.chat_id)
+        text = update.message.text
+        logging.info('STATS [%s] [reto-error] %s' % (chat_id, text))
+        txt = (
+            'Parece que hubo un error, usa /help para ver la ayuda '
+            'e intenta emplear únicamente los comandos propuestos. '
+        )
+        update.message.reply_text(txt, reply_markup=ReplyKeyboardHide())
+        user_data.clear()
         return ConversationHandler.END
 
 
@@ -702,7 +754,7 @@ class PedirConversationHandler(ConversationHandler):
         ['Pedir problema'],
         ['Ver más pedidos'],
         ['Listar resueltos'],
-        ['Nada']
+        ['Volver']
     ]
 
     def __init__(self, tr_bot):
@@ -724,9 +776,6 @@ class PedirConversationHandler(ConversationHandler):
                     RegexHandler('^Listar resueltos$',
                                  self.pedir_listar,
                                  pass_user_data=True),
-                    RegexHandler('^(Nada|No)$',
-                                 self.pedir_fin,
-                                 pass_user_data=True)
                 ],
                 self.PEDIR_CAPITULO: [
                     MessageHandler(Filters.text,
@@ -740,10 +789,11 @@ class PedirConversationHandler(ConversationHandler):
                 ],
             },
             fallbacks=[
-                RegexHandler('^(Nada|No)$',
+                RegexHandler('^Volver$',
                              self.pedir_fin,
                              pass_user_data=True),
-                CommandHandler('start', self.tr_bot.start)
+                MessageHandler(Filters.text,
+                               self.pedir_error, pass_user_data=True),
             ]
         )
 
@@ -883,6 +933,18 @@ class PedirConversationHandler(ConversationHandler):
         update.message.reply_text('Vale!', reply_markup=ReplyKeyboardHide())
         return ConversationHandler.END
 
+    def pedir_error(self, bot, update, user_data):
+        chat_id = str(update.message.chat_id)
+        text = update.message.text
+        logging.info('STATS [%s] [pedir-error] %s' % (chat_id, text))
+        txt = (
+            'Parece que hubo un error, usa /help para ver la ayuda '
+            'e intenta emplear únicamente los comandos propuestos. '
+        )
+        update.message.reply_text(txt, reply_markup=ReplyKeyboardHide())
+        user_data.clear()
+        return ConversationHandler.END
+
 
 class SettingsConversationHandler(ConversationHandler):
 
@@ -892,7 +954,7 @@ class SettingsConversationHandler(ConversationHandler):
     kb_settings = [
         ['Cambiar configuración'],
         ['Borrar toda actividad'],
-        ['Nada']
+        ['Volver']
     ]
 
     def __init__(self, tr_bot):
@@ -906,16 +968,16 @@ class SettingsConversationHandler(ConversationHandler):
                                  self.settings_config),
                     RegexHandler('^Borrar toda actividad$',
                                  self.settings_borrar),
-                    RegexHandler('^Nada$',
-                                 self.settings_done)
                 ],
                 self.BORRAR_CONFIRMACION: [
                     MessageHandler(Filters.text, self.settings_borrado),
                 ]
             },
             fallbacks=[
-                RegexHandler('^(Nada|No)$', self.settings_done),
-                CommandHandler('start', self.tr_bot.start)
+                RegexHandler('^Volver$',
+                             self.settings_fin),
+                MessageHandler(Filters.text,
+                               self.settings_error),
             ]
         )
 
@@ -1024,10 +1086,21 @@ class SettingsConversationHandler(ConversationHandler):
                                              one_time_keyboard=True))
         return self.TIPO_SETTINGS
 
-    def settings_done(self, bot, update):
+    def settings_fin(self, bot, update):
         chat_id = str(update.message.chat_id)
         logging.info('STATS [%s] [settings-fin]' % chat_id)
         update.message.reply_text('Vale!', reply_markup=ReplyKeyboardHide())
+        return ConversationHandler.END
+
+    def settings_error(self, bot, update):
+        chat_id = str(update.message.chat_id)
+        text = update.message.text
+        logging.info('STATS [%s] [settings-error] %s' % (chat_id, text))
+        txt = (
+            'Parece que hubo un error, usa /help para ver la ayuda '
+            'e intenta emplear únicamente los comandos propuestos. '
+        )
+        update.message.reply_text(txt, reply_markup=ReplyKeyboardHide())
         return ConversationHandler.END
 
 
