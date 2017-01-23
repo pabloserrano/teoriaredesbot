@@ -20,16 +20,15 @@ from telegram.ext import (Updater,
 import codecs
 import math
 from dateutil import parser
-from pushover import init, Client
+from pushover import Client
 
 
 REL_TOL = 1e-4
 
 
-def split_list(alist, wanted_parts=1):
-    length = len(alist)
-    return [ alist[ i * length // wanted_parts: (i + 1) * length // wanted_parts] 
-             for i in range(wanted_parts) ]
+def split_list(l_in, length):
+    for i in range(0, len(l_in), length):
+        yield l_in[i:i + length]
 
 class TRBot:
     def __init__(self):
@@ -226,12 +225,12 @@ class TRBot:
     def help(self, bot, update):
         chat_id = str(update.message.chat_id)
         logging.info('STATS [%s] [help]' % chat_id)
-        
+
         texto = (
             '/help Muestra este mensaje\n'
             '/opinar Valorar última clase, enviar texto libre\n'
-            '/pedir Votar para que se resuelvan problemas en la '
-            'siguiente sesión de problemas\n'
+            '/pedir Votar para que se resuelvan problemas en clase, '
+            'ver más votados, listar problemas ya resueltos en clase\n'
             '/reto Participar en el reto: ver problemas propuestos, '
             'enviar solución, ver soluciones, ver clasificación\n'
             '/settings Cambiar configuración\n'
@@ -347,7 +346,7 @@ class OpinarConversationHandler(ConversationHandler):
 
     def opinar_votar(self, bot, update):
         chat_id = str(update.message.chat_id)
-        logging.info('STATS [%s] [votar]' % chat_id) 
+        logging.info('STATS [%s] [votar]' % chat_id)
         update.message.reply_text(
             'Opinión sobre la última clase:',
             reply_markup=ReplyKeyboardMarkup(self.kb_votos,
@@ -689,7 +688,7 @@ class RetoConversationHandler(ConversationHandler):
     def reto_fin(self, bot, update):
         chat_id = str(update.message.chat_id)
         logging.info('STATS [%s] [reto-fin]' % chat_id)
-        update.message.reply_text('Ok')
+        update.message.reply_text('Ok', reply_markup=ReplyKeyboardHide())
         return ConversationHandler.END
 
 
@@ -724,7 +723,7 @@ class PedirConversationHandler(ConversationHandler):
                                  pass_user_data=True),
                     RegexHandler('^Listar resueltos$',
                                  self.pedir_listar,
-                                 pass_user_data=True),     
+                                 pass_user_data=True),
                     RegexHandler('^(Nada|No)$',
                                  self.pedir_fin,
                                  pass_user_data=True)
@@ -773,9 +772,9 @@ class PedirConversationHandler(ConversationHandler):
             kb_capitulo = []
             # kb_capitulo.append(problemas.sections())
             # reply_keyboard = [['1','2','3','4'],['5','6','7']]
-            FILAS_DE_BOTONES = 2
+            BOTONES_POR_FILA = 4
             opciones = problemas.sections()
-            for l_out in split_list(opciones, FILAS_DE_BOTONES):
+            for l_out in split_list(opciones, BOTONES_POR_FILA):
                 kb_capitulo.append(l_out)
             update.message.reply_text(
                 'De qué capítulo',
