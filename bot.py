@@ -1,5 +1,24 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
+# Mailst: send personalized emails to your students
+# Copyright (C) 2017 Jesús Arias, Pablo Serrano
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see
+# <http://www.gnu.org/licenses/>.
+#
+
 import datetime
 import random
 import logging
@@ -29,6 +48,7 @@ REL_TOL = 1e-4
 def split_list(l_in, length):
     for i in range(0, len(l_in), length):
         yield l_in[i:i + length]
+
 
 class TRBot:
     def __init__(self):
@@ -83,7 +103,7 @@ class TRBot:
     def run(self):
         logging.info('El bot arranca')
         self.updater.start_polling()
-        # self.po_client.send_message("Se acaba de arrancar el bot", title="Inicio bot")
+        self.po_client.send_message("Se acaba de arrancar el bot", title="Inicio bot")
 
         # Run the bot until the you presses Ctrl-C
         # or the process receives SIGINT,
@@ -205,7 +225,6 @@ class TRBot:
                         f.write(nick + ",1\n")
                 f.close()
             else:
-                # PBL TODO XXX FIX ENVIAR NOTIFICACION
                 self.po_client.send_message("Se ha acabado la lista de nicks",
                     title="Nicks agotados")
                 logging.info('No hay nicks disponibles')
@@ -226,7 +245,7 @@ class TRBot:
                 'Hola de nuevo, tu nick es %s'
                 % self.users.get(chat_id, 'nick'),
                 reply_markup=ReplyKeyboardHide())
-            # return ConversationHandler.END
+            return ConversationHandler.END
 
     def help(self, bot, update):
         chat_id = str(update.message.chat_id)
@@ -240,7 +259,7 @@ class TRBot:
             '/reto Participar en el reto: ver problemas propuestos, '
             'enviar solución, ver soluciones, ver clasificación\n'
             '/settings Cambiar configuración\n'
-            '/start Recordar el nick\n'
+            '/start Reiniciar, recordar el nick\n'
         )
         update.message.reply_text(texto, parse_mode='HTML')
 
@@ -693,10 +712,11 @@ class RetoConversationHandler(ConversationHandler):
         if users_con_puntos > 2:
             user_is_top = 0
             i = 1
-            txt = "<b>Clasificación actual:</b>\n"
+            txt = "<b>Clasificación:</b>\n"
             for user in sorted(puntos, key=puntos.get, reverse=True):
                 if user == chat_id:
-                    txt = (txt + str(i) + '. ' +
+                    # txt = (txt + str(i) + '. ' +
+                    txt = (txt +
                            self.tr_bot.users.get(user, 'nick') +
                            " (tú)\t" + str(puntos[user]) + "\n")
                     if i <= MAX_LINES:
@@ -784,14 +804,14 @@ class PedirConversationHandler(ConversationHandler):
                                  pass_user_data=True),
                 ],
                 self.PEDIR_CAPITULO: [
-                    MessageHandler(Filters.text,
-                                   self.pedir_votar,
-                                   pass_user_data=True),
+                    RegexHandler('^[0-9]+$',
+                                 self.pedir_votar,
+                                 pass_user_data=True),
                 ],
                 self.PEDIR_VOTADO: [
-                    MessageHandler(Filters.text,
-                                   self.pedir_votado,
-                                   pass_user_data=True),
+                    RegexHandler('^[0-9]+$',
+                                 self.pedir_votado,
+                                 pass_user_data=True),
                 ],
             },
             fallbacks=[
@@ -840,6 +860,9 @@ class PedirConversationHandler(ConversationHandler):
         else:
             prob_set = []
             user_data['capitulo'] = numero
+            if not problemas.has_section(numero):
+                # El capítulo no existe, se cierra la conversación
+                return self.pedir_error(bot, update, user_data)
             for problema in problemas.options(numero):
                 if problemas.get(numero, problema) == 'False':
                     prob_set.append(problema)
@@ -898,9 +921,10 @@ class PedirConversationHandler(ConversationHandler):
                                 peticiones += 1
                     if peticiones > 0:
                         votos[prob] = peticiones
-        texto = "<b>Problemas más pedidos</b>\n"
+        texto = "<b>Problemas más pedidos:</b>\n"
         for w in sorted(votos, key=votos.get, reverse=True):
-            texto = texto + str(w) + ' ' + str(votos[w]) + '\n'
+            texto = texto + str(w) + ', '  # + str(votos[w]) + '\n'
+            # texto = texto + str(w) + ' ' + str(votos[w]) + '\n'
         update.message.reply_text(texto, parse_mode='HTML')
         update.message.reply_text(
             '¿Algo más?',
