@@ -108,14 +108,20 @@ class TRBot:
 
         f = codecs.open(self.file_avisos, 'w', 'utf-8')
         for aviso in avisos:
-            (enviar, text) = aviso.split("\t")
+            (enviar, destino, texto) = aviso.split("\t")
             if enviar == '1':
-                logging.info('Hay un aviso')
-                for user in self.users.sections():
-                    bot.sendMessage(chat_id=int(user),
-                                    text='AVISO: ' + text,
+                if destino == '0':  # Es broadcast
+                    logging.info('Aviso broadcast: %s' % texto)
+                    for user in self.users.sections():
+                        bot.sendMessage(chat_id=int(user),
+                                        text='AVISO: ' + texto,
+                                        parse_mode='HTML')
+                else:  # Es unicast
+                    logging.info('Aviso a %s: %s' % (destino, texto))
+                    bot.sendMessage(chat_id=int(destino),
+                                    text='AVISO: ' + texto,
                                     parse_mode='HTML')
-                f.write('0\t%s\n' % text)
+                f.write('0\t%s\t%s\n' % (destino, texto))
             else:
                 f.write(aviso + '\n')
         f.close()
