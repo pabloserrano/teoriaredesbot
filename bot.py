@@ -40,6 +40,7 @@ import codecs
 import math
 from dateutil import parser
 from pushover import Client
+import time
 
 
 REL_TOL = 1e-4
@@ -69,7 +70,8 @@ class TRBot:
         # Bloque Pedir problemas a hacer en clase
         self.file_pedir_probs = config.get('Pedir', 'problemas')
         # Bloque Reto hacer problemas
-        self.file_reto_probs = config.get('Reto', 'propuestos')
+        # self.file_reto_probs = config.get('Reto', 'propuestos')
+        self.file_reto_problemas = config.get('Reto', 'problemas')
         logging.basicConfig(
             handlers=[logging.FileHandler(file_log, 'a', 'utf-8')],
             level=logging.INFO,
@@ -104,7 +106,7 @@ class TRBot:
     def run(self):
         logging.info('El bot arranca')
         self.updater.start_polling()
-        self.po_client.send_message("Se acaba de arrancar el bot", title="Inicio bot")
+        # self.po_client.send_message("Se acaba de arrancar el bot", title="Inicio bot")
 
         # Run the bot until the you presses Ctrl-C
         # or the process receives SIGINT,
@@ -327,8 +329,7 @@ class OpinarConversationHandler(ConversationHandler):
     ]
     kb_votos = [
         ['Muy difícil', 'Muy fácil'],
-        ['Está bien así'],
-        ['Enviar texto libre'],
+        ['Está bien así', 'Texto libre'],
         ['Volver'],
     ]
 
@@ -539,22 +540,30 @@ class RetoConversationHandler(ConversationHandler):
     def reto_enunciados(self, bot, update):
         chat_id = str(update.message.chat_id)
         logging.info('STATS [%s] [reto-enunciados]' % chat_id)
-        reto_activo = False
-        with codecs.open(self.tr_bot.file_reto_probs, 'r', 'utf-8') as myfile:
-            for myline in myfile:
-                (prob, sol) = myline.strip('\n').split("\t")
-                if 'Propuesto' in sol:
-                    reto_activo = True
-        if reto_activo:
-            texto = (
-                'El enunciado de los problemas propuestos está '
-                '<a href="http://www.it.uc3m.es/pablo/propuestos.pdf">'
-                'en este enlace</a>. \n '
-            )
+        problemas = configparser.ConfigParser()
+        problemas.read_file(
+            codecs.open(self.tr_bot.file_reto_problemas, "r", "utf-8"))
+        disponibles = False
+        t_now = datetime.datetime.now()
+        for prob in problemas.sections():
+            t_ini = parser.parse(problemas.get(prob, 'fecha_inicio'))
+            # t_fin = parser.parse(problemas.get(prob, 'fecha_fin'))
+            if (t_now > t_ini):  # & (t_now < t_fin):
+                disponibles = True
+        if disponibles:
+            update.message.reply_text('Problemas propuestos hasta ahora:')
+            for prob in problemas.sections():
+                t_ini = parser.parse(problemas.get(prob, 'fecha_inicio'))
+                if t_now > t_ini:
+                    txt = prob + ' (hasta ' + problemas.get(prob, 'fecha_fin')
+                    txt += '): ' + problemas.get(prob, 'enunciado')
+                    update.message.reply_text(txt)
+                    time.sleep(1)
         else:
-            texto = 'Ahora mismo no hay problemas propuestos \n'
+            update.message.reply_text(
+                'Áun no se han propuesto problemas')
 
-        texto += 'Alguna cosa más?'
+        texto = 'Alguna cosa más?'
         update.message.reply_text(texto,
                                   reply_markup=ReplyKeyboardMarkup(
                                       self.kb_reto,
@@ -565,14 +574,25 @@ class RetoConversationHandler(ConversationHandler):
     def reto_soluciones(self, bot, update):
         chat_id = str(update.message.chat_id)
         logging.info('STATS [%s] [reto-soluciones]' % chat_id)
-        txt = "<b>Soluciones hasta ahora:</b>\n"
-        with codecs.open(self.tr_bot.file_reto_probs, 'r', 'utf-8') as myfile:
-            for myline in myfile:
-                (prob, sol) = myline.split("\t")
-                if 'Propuesto' not in sol:
-                    txt = txt + prob + ": Solución = " + sol
-                    # OJO QUE SE USAN COMAS PARA DECIMALES (EN VEZ DE PUNTOS)
-                    solucion = float(sol.replace(",", "."))
+        problemas = configparser.ConfigParser()
+        problemas.read_file(
+            codecs.open(self.tr_bot.file_reto_problemas, "r", "utf-8"))
+        disponibles = False
+        t_now = datetime.datetime.now()
+        for prob in problemas.sections():
+            # t_ini = parser.parse(problemas.get(prob, 'fecha_inicio'))
+            t_fin = parser.parse(problemas.get(prob, 'fecha_fin'))
+            if (t_now > t_fin):
+                disponibles = True
+
+        if disponibles:
+            txt = 'Soluciones hasta ahora:\n'
+            for prob in problemas.sections():
+                t_fin = parser.parse(problemas.get(prob, 'fecha_fin'))
+                if t_now > t_fin:  # Hay un problema que enseñar
+                    solucion = problemas.get(prob, 'solucion')
+                    txt += prob + ': ' + solucion + '\n'
+                    solucion = float(solucion.replace(",", "."))
                     respondieron = 0
                     acertaron = 0
                     txt_extra = "\n"
@@ -590,6 +610,8 @@ class RetoConversationHandler(ConversationHandler):
                                         txt_extra = ' (incl. la tuya)\n'
                     txt = (txt + "Respuestas: " + str(respondieron) +
                            " Correctas: " + str(acertaron) + txt_extra)
+        else:
+            txt = 'Aún no hay soluciones disponibles'
         update.message.reply_text(txt, parse_mode='HTML')
         update.message.reply_text(
             '¿Algo más?',
@@ -600,12 +622,16 @@ class RetoConversationHandler(ConversationHandler):
     def reto_elegir(self, bot, update, user_data):
         chat_id = str(update.message.chat_id)
         logging.info('STATS [%s] [reto-elegir]' % chat_id)
+        problemas = configparser.ConfigParser()
+        problemas.read_file(
+            codecs.open(self.tr_bot.file_reto_problemas, "r", "utf-8"))
         propuestos = list()
-        with codecs.open(self.tr_bot.file_reto_probs, 'r', 'utf-8') as myfile:
-            for myline in myfile:
-                (prob, sol) = myline.strip('\n').split("\t")
-                if 'Propuesto' in sol:
-                    propuestos.append(prob)
+        t_now = datetime.datetime.now()
+        for prob in problemas.sections():
+            t_ini = parser.parse(problemas.get(prob, 'fecha_inicio'))
+            t_fin = parser.parse(problemas.get(prob, 'fecha_fin'))
+            if (t_now > t_ini) & (t_now < t_fin):
+                propuestos.append(prob)
         if propuestos == list():
             update.message.reply_text(
                 'No hay ningún problema propuesto actualmente. '
@@ -617,9 +643,6 @@ class RetoConversationHandler(ConversationHandler):
             kb_probs = []
             kb_probs.append(propuestos)
             update.message.reply_text(
-                'El enunciado de los problemas propuestos está '
-                '<a href="http://www.it.uc3m.es/pablo/propuestos.pdf">'
-                'en este enlace</a>. '
                 'Elige problema para enviar solución: ',
                 reply_markup=ReplyKeyboardMarkup(kb_probs,
                                                  one_time_keyboard=True),
@@ -630,16 +653,17 @@ class RetoConversationHandler(ConversationHandler):
         chat_id = str(update.message.chat_id)
         problema = update.message.text
         logging.info('STATS [%s] [reto-enviar] %s' % (chat_id, problema))
-
+        problemas = configparser.ConfigParser()
+        problemas.read_file(
+            codecs.open(self.tr_bot.file_reto_problemas, "r", "utf-8"))
         propuestos = list()
-        with codecs.open(self.tr_bot.file_reto_probs, 'r', 'utf-8') as myfile:
-            for myline in myfile:
-                (prob, sol) = myline.strip('\n').split("\t")
-                if 'Propuesto' in sol:
-                    propuestos.append(prob)
+        t_now = datetime.datetime.now()
+        for prob in problemas.sections():
+            t_ini = parser.parse(problemas.get(prob, 'fecha_inicio'))
+            t_fin = parser.parse(problemas.get(prob, 'fecha_fin'))
+            if (t_now > t_ini) & (t_now < t_fin):
+                propuestos.append(prob)
 
-        print(problema)
-        print(propuestos)
         if problema not in propuestos:
             # Quiere mandar solución a problema ya resuelto
             return self.reto_error(bot, update, user_data)
@@ -649,7 +673,8 @@ class RetoConversationHandler(ConversationHandler):
                    self.tr_bot.users.get(chat_id, problema) + '. ' +
                    'Escribe tu solución o "Zzz" para cancelar: ')
         else:
-            txt = 'Escribe tu solución para el problema ' + problema + ': '
+            txt = ('Escribe tu solución para el problema ' + problema + ': ' +
+                    'o "Zzz" para cancelar: ')
         user_data['solucion'] = 0
         user_data['prob'] = problema
         update.message.reply_text(txt, reply_markup=ReplyKeyboardHide())
@@ -683,30 +708,45 @@ class RetoConversationHandler(ConversationHandler):
     def reto_clasificacion(self, bot, update):
         chat_id = str(update.message.chat_id)
         logging.info('STATS [%s] [reto-clasificacion]' % chat_id)
-
+        problemas = configparser.ConfigParser()
+        problemas.read_file(
+            codecs.open(self.tr_bot.file_reto_problemas, "r", "utf-8"))
         MAX_LINES = 3
+
         soluciones = dict()
-        with codecs.open(self.tr_bot.file_reto_probs, 'r', 'utf-8') as myfile:
-            for myline in myfile:
-                (prob, sol) = myline.strip('\n').split("\t")
-                if 'Propuesto' not in sol:
-                    soluciones[prob] = sol
-        puntos = dict()
-        for user in self.tr_bot.users.sections():
-            if self.tr_bot.users.get(user, 'ignore') == 'False':
-                puntos[user] = 0
+        t_now = datetime.datetime.now()
+        for prob in problemas.sections():
+            t_fin = parser.parse(problemas.get(prob, 'fecha_fin'))
+            if (t_now > t_fin):
+                soluciones[prob] = problemas.get(prob, 'solucion')
+
+        if soluciones == dict():
+            txt_reply = ('Aún no ha acabado el plazo de entrega '
+                         'para ningún problema.'
+                         )
+            update.message.reply_text(
+                txt_reply + '\n ¿Algo más?',
+                parse_mode='HTML',
+                reply_markup=ReplyKeyboardMarkup(self.kb_reto,
+                                                 one_time_keyboard=True))
+            return self.RETO_ENTRADA
+        else:
+            puntos = dict()
+            for user in self.tr_bot.users.sections():
+                if self.tr_bot.users.get(user, 'ignore') == 'False':
+                    puntos[user] = 0
 
         for prob in soluciones:
-            sol_correcta = float(soluciones[prob].replace(",", "."))
+            solucion = float(soluciones[prob].replace(",", "."))
+            # A buscar la primera y última solución correcta
             ts_first = datetime.datetime.now()
             ts_last = datetime.datetime(2014, 5, 29, 20, 45)  # LA DECIMAAAAAA
             for user in self.tr_bot.users.sections():
                 if self.tr_bot.users.get(user, 'ignore') == 'False':
                     if self.tr_bot.users.has_option(user, prob):
-                        sol_enviada = float(self.tr_bot.users.get(user, prob)
+                        sol_usr = float(self.tr_bot.users.get(user, prob)
                                                              .replace(",", "."))
-                        if math.isclose(sol_correcta, sol_enviada,
-                                        rel_tol=REL_TOL):
+                        if math.isclose(solucion, sol_usr, rel_tol=REL_TOL):
                             ts_sol = parser.parse(
                                 self.tr_bot.users.get(user,
                                                       prob + 'timestamp'))
@@ -716,12 +756,13 @@ class RetoConversationHandler(ConversationHandler):
                                 ts_last = ts_sol
             delta = ((ts_last - ts_first).days * 24 * 60 +
                      (ts_last - ts_first).seconds / 60)
+            # A poner puntos según el tiempo de llegada
             for user in self.tr_bot.users.sections():
                 if self.tr_bot.users.get(user, 'ignore') == 'False':
                     if self.tr_bot.users.has_option(user, prob):
                         sol_enviada = float(self.tr_bot.users.get(user, prob)
                                                              .replace(",", "."))
-                        if math.isclose(sol_correcta, sol_enviada,
+                        if math.isclose(solucion, sol_enviada,
                                         rel_tol=REL_TOL):
                             if delta > 0:
                                 ts_sol = parser.parse(
@@ -739,7 +780,7 @@ class RetoConversationHandler(ConversationHandler):
             if puntos[user] > 0:
                 users_con_puntos += 1
 
-        if users_con_puntos > 2:
+        if users_con_puntos > 1:
             user_is_top = False
             i = 1
             txt = "<b>Clasificación:</b>\n"
@@ -748,13 +789,13 @@ class RetoConversationHandler(ConversationHandler):
                     # txt = (txt + str(i) + '. ' +
                     txt = (txt +
                            self.tr_bot.users.get(user, 'nick') +
-                           " (tú)\t" + str(puntos[user]) + "\n")
+                           " (tú)\t" + str(round(puntos[user],2)) + "\n")
                     if i <= MAX_LINES:
                         user_is_top = True
                 else:
-                    txt = (txt + str(i) + '. ' +
+                    txt = (txt + 
                            self.tr_bot.users.get(user, 'nick') +
-                           "\t" + str(puntos[user]) + "\n")
+                           "\t" + str(round(puntos[user],2)) + "\n")
                 i += 1
 
             txt_reply = ''
@@ -772,7 +813,7 @@ class RetoConversationHandler(ConversationHandler):
                         if self.tr_bot.users.get(chat_id, 'nick') in line:
                             txt_reply = txt_reply + line + '\n---\n'
         else:
-            txt_reply = 'De momento hay pocos usuarios con puntos.\n'
+            txt_reply = 'No hay suficiente diferencia entre usuarios.\n'
         update.message.reply_text(
             txt_reply + '\n ¿Algo más?',
             parse_mode='HTML',
@@ -807,9 +848,8 @@ class PedirConversationHandler(ConversationHandler):
     PEDIR_VOTADO = 3
 
     kb_pedir = [
-        ['Pedir problema'],
-        ['Ver más pedidos'],
-        ['Listar resueltos'],
+        ['Pedir problema', 'Ver más pedidos'],
+        ['Lista resueltos'],
         ['Volver']
     ]
 
@@ -829,7 +869,7 @@ class PedirConversationHandler(ConversationHandler):
                     RegexHandler('^Ver más pedidos$',
                                  self.pedir_stats,
                                  pass_user_data=True),
-                    RegexHandler('^Listar resueltos$',
+                    RegexHandler('^Lista resueltos$',
                                  self.pedir_listar,
                                  pass_user_data=True),
                 ],
@@ -972,7 +1012,7 @@ class PedirConversationHandler(ConversationHandler):
         problemas.read_file(
             codecs.open(self.tr_bot.file_pedir_probs, "r", "utf-8"))
 
-        texto = "Listado de problemas ya resueltos en case: \n"
+        texto = "Listado de problemas ya resueltos en clase: \n"
         for capitulo in problemas.sections():
             txt_tmp = ''
             for problema in problemas.options(capitulo):
@@ -1048,7 +1088,7 @@ class SettingsConversationHandler(ConversationHandler):
         update.message.reply_text(
             'Tienes las notificaciones %s. '
             'Elige si quieres cambiar la configuración de las notificaciones, '
-            'borrar toda la actividad (o nada)'
+            'o no. '
             % avisos,
             reply_markup=ReplyKeyboardMarkup(self.kb_settings,
                                              one_time_keyboard=True))
