@@ -20,7 +20,7 @@ listaclases = ./files/opinar.listaclases.txt
 problemas = ./files/pedir.problemas.txt
 
 [Reto]
-propuestos = ./files/reto.propuestos.txt
+problemas = ./files/reto.problemas.txt
 
 [Pushover]
 key = PUSHOVER_KEY
