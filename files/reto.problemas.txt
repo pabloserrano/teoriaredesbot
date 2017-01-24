@@ -1,0 +1,11 @@
+[P01]
+enunciado = ¿Cuál es la probabilidad de sacar 1 seis con un dado?
+solucion = 0,166666
+fecha_inicio = 2017-01-20 19:02:00
+fecha_fin = 2017-01-24 19:03:00
+
+[P02]
+enunciado = Probabilidad de que el Barsa gane sin ayuda arbitral.
+fecha_inicio = 2017-01-20 19:02:00
+fecha_fin = 2017-01-24 19:03:00
+solucion = 0,00

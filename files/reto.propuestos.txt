@@ -1,6 +1,0 @@
-P01	10,00
-P02	20,00
-P03	30,00
-P04	Propuesto
-P05	Propuesto
-P06	Propuesto
