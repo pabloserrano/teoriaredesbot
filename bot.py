@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Mailst: send personalized emails to your students
+# Teoria de redes BOT
 # Copyright (C) 2017 Jesús Arias, Pablo Serrano
 #
 # This program is free software: you can redistribute it and/or modify
@@ -96,7 +96,8 @@ class TRBot:
         dp.add_handler(CommandHandler("help", self.help))
         dp.add_handler(CallbackQueryHandler(self.button))
         # on noncommand i.e message - echo the message on Telegram
-        dp.add_handler(MessageHandler(Filters.text, self.echo))
+        dp.add_handler(MessageHandler(Filters.text, self.unknown_text))
+        dp.add_handler(MessageHandler(Filters.command, self.unknown_command))
         # log all errors
         dp.add_error_handler(self.error)
 
@@ -187,9 +188,14 @@ class TRBot:
     def error(self, bot, update, error):
         logging.warn('Update "%s" caused error "%s"' % (update, error))
 
-    def echo(self, bot, update):
+    def unknown_text(self, bot, update):
         chat_id = str(update.message.chat_id)
-        logging.info('STATS [%s] [echo]' % chat_id)
+        logging.info('STATS [%s] [unknown-text]' % chat_id)
+        update.message.reply_text('No entiendo. Escriba /help para ayuda')
+
+    def unknown_command(self, bot, update):
+        chat_id = str(update.message.chat_id)
+        logging.info('STATS [%s] [unknown-command]' % chat_id)
         update.message.reply_text('No entiendo. Escriba /help para ayuda')
 
     def start(self, bot, update):
@@ -226,7 +232,7 @@ class TRBot:
                 f.close()
             else:
                 self.po_client.send_message("Se ha acabado la lista de nicks",
-                    title="Nicks agotados")
+                                            title="Nicks agotados")
                 logging.info('No hay nicks disponibles')
                 nick = 'N' + ''.join(
                     random.SystemRandom().choice(string.digits)
@@ -361,6 +367,8 @@ class OpinarConversationHandler(ConversationHandler):
                 RegexHandler('^Volver$',
                              self.opinar_fin,
                              pass_user_data=True),
+                CommandHandler('start',
+                               self.tr_bot.start),
                 MessageHandler(Filters.text,
                                self.opinar_error, pass_user_data=True),
             ]
@@ -391,7 +399,8 @@ class OpinarConversationHandler(ConversationHandler):
         # chat_id = str(update.message.chat_id)
         # logging.info('STATS [%s] [opinar-clase-t]' % chat_id)
         update.message.reply_text(
-            'Texto libre sobre la última clase:')
+            'Texto libre sobre la última clase:',
+            reply_markup=ReplyKeyboardHide())
         return self.OPINAR_VOTADO
 
     def opinar_voto_recibido(self, bot, update, user_data):
@@ -425,7 +434,8 @@ class OpinarConversationHandler(ConversationHandler):
     def opinar_texto(self, bot, update, user_data):
         # chat_id = str(update.message.chat_id)
         # logging.info('STATS [%s] [opinar-bot]' % chat_id)
-        update.message.reply_text('Comentario sobre el bot:')
+        update.message.reply_text('Comentario sobre el bot:',
+                                  reply_markup=ReplyKeyboardHide())
         return self.OPINAR_TEXTO
 
     def opinar_texto_recibido(self, bot, update):
@@ -507,6 +517,8 @@ class RetoConversationHandler(ConversationHandler):
                 RegexHandler('^Volver$',
                              self.reto_fin,
                              pass_user_data=True),
+                CommandHandler('start',
+                               self.tr_bot.start),
                 MessageHandler(Filters.text,
                                self.reto_error, pass_user_data=True),
                 MessageHandler(Filters.command,
@@ -728,7 +740,7 @@ class RetoConversationHandler(ConversationHandler):
                 users_con_puntos += 1
 
         if users_con_puntos > 2:
-            user_is_top = 0
+            user_is_top = False
             i = 1
             txt = "<b>Clasificación:</b>\n"
             for user in sorted(puntos, key=puntos.get, reverse=True):
@@ -836,6 +848,8 @@ class PedirConversationHandler(ConversationHandler):
                 RegexHandler('^Volver$',
                              self.pedir_fin,
                              pass_user_data=True),
+                CommandHandler('start',
+                               self.tr_bot.start),
                 MessageHandler(Filters.text,
                                self.pedir_error, pass_user_data=True),
             ]
@@ -1017,6 +1031,8 @@ class SettingsConversationHandler(ConversationHandler):
             fallbacks=[
                 RegexHandler('^Volver$',
                              self.settings_fin),
+                CommandHandler('start',
+                               self.tr_bot.start),
                 MessageHandler(Filters.text,
                                self.settings_error),
             ]
