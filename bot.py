@@ -106,7 +106,7 @@ class TRBot:
     def run(self):
         logging.info('El bot arranca')
         self.updater.start_polling()
-        # self.po_client.send_message("Se acaba de arrancar el bot", title="Inicio bot")
+        self.po_client.send_message("Se acaba de arrancar el bot", title="Inicio bot")
 
         # Run the bot until the you presses Ctrl-C
         # or the process receives SIGINT,
@@ -136,9 +136,10 @@ class TRBot:
                 if destino == '0':  # Es broadcast
                     logging.info('Aviso broadcast: %s' % texto)
                     for user in self.users.sections():
-                        bot.sendMessage(chat_id=int(user),
-                                        text='AVISO: ' + texto,
-                                        parse_mode='HTML')
+                        if self.users.get(user, 'news') == 'True':
+                            bot.sendMessage(chat_id=int(user),
+                                            text='AVISO: ' + texto,
+                                            parse_mode='HTML')
                 else:  # Es unicast
                     logging.info('Aviso a %s: %s' % (destino, texto))
                     bot.sendMessage(chat_id=int(destino),
@@ -221,8 +222,8 @@ class TRBot:
                     libres += 1
 
             if libres > 0:
-                nick_taken = 1
-                while nick_taken == 1:
+                nick_taken = '1'
+                while nick_taken == '1':
                     nick, nick_taken = random.choice(nicks).split(",")
                 # Hay que guardar el nick usado
                 f = codecs.open(self.file_nicks, 'w', 'utf-8')
